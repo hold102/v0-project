@@ -62,38 +62,40 @@ function ExpenseSplitterApp() {
   return (
     <div className="min-h-screen bg-background">
       {/* Phone Frame */}
-      <div className="max-w-md mx-auto min-h-screen relative shadow-2xl bg-background">
-        {view.type === 'home' && (
-          <HomeView onGroupSelect={handleGroupSelect} />
-        )}
-        
-        {view.type === 'groups' && (
-          <GroupsView onGroupSelect={handleGroupSelect} />
-        )}
-        
-        {view.type === 'group-detail' && (
-          <GroupDetailView 
-            groupId={view.groupId} 
-            onBack={handleBack}
-            onAddExpense={() => handleAddExpense(view.groupId)}
-          />
-        )}
-        
-        {view.type === 'add-expense' && (
-          <AddExpenseView 
-            groupId={view.groupId}
-            onBack={handleBack}
-            onSuccess={handleExpenseSuccess}
-          />
-        )}
-        
-        {view.type === 'activity' && (
-          <ActivityView onGroupSelect={handleGroupSelect} />
-        )}
-        
-        {view.type === 'profile' && (
-          <ProfileView />
-        )}
+      <div className="max-w-md mx-auto min-h-screen relative bg-background overflow-hidden">
+        <div className="animate-slide-up">
+          {view.type === 'home' && (
+            <HomeView onGroupSelect={handleGroupSelect} />
+          )}
+          
+          {view.type === 'groups' && (
+            <GroupsView onGroupSelect={handleGroupSelect} />
+          )}
+          
+          {view.type === 'group-detail' && (
+            <GroupDetailView 
+              groupId={view.groupId} 
+              onBack={handleBack}
+              onAddExpense={() => handleAddExpense(view.groupId)}
+            />
+          )}
+          
+          {view.type === 'add-expense' && (
+            <AddExpenseView 
+              groupId={view.groupId}
+              onBack={handleBack}
+              onSuccess={handleExpenseSuccess}
+            />
+          )}
+          
+          {view.type === 'activity' && (
+            <ActivityView onGroupSelect={handleGroupSelect} />
+          )}
+          
+          {view.type === 'profile' && (
+            <ProfileView />
+          )}
+        </div>
 
         {/* Bottom Navigation - only show when not in detail/add views */}
         {!['group-detail', 'add-expense'].includes(view.type) && (

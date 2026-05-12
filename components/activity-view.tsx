@@ -1,9 +1,9 @@
 'use client'
 
 import { useApp } from '@/lib/app-context'
-import { Card } from '@/components/ui/card'
 import { categoryConfig, type ExpenseCategory } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { Clock, TrendingUp } from 'lucide-react'
 
 interface ActivityViewProps {
   onGroupSelect: (groupId: string) => void
@@ -12,7 +12,6 @@ interface ActivityViewProps {
 export function ActivityView({ onGroupSelect }: ActivityViewProps) {
   const { groups, getUserById } = useApp()
 
-  // Get all expenses sorted by date
   const allExpenses = groups
     .flatMap(group => 
       group.expenses.map(expense => ({
@@ -23,7 +22,6 @@ export function ActivityView({ onGroupSelect }: ActivityViewProps) {
     )
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Group by date
   const groupedByDate = allExpenses.reduce((acc, expense) => {
     const date = expense.date
     if (!acc[date]) acc[date] = []
@@ -32,33 +30,59 @@ export function ActivityView({ onGroupSelect }: ActivityViewProps) {
   }, {} as Record<string, typeof allExpenses>)
 
   return (
-    <div className="pb-24">
+    <div className="min-h-screen pb-28">
       {/* Header */}
-      <div className="px-5 pt-12 pb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-1">支出动态</h1>
-        <p className="text-muted-foreground">查看所有支出记录</p>
+      <div className="px-6 pt-14 pb-6">
+        <h1 className="text-2xl font-bold text-foreground tracking-tight mb-1">动态</h1>
+        <p className="text-muted-foreground text-sm">查看所有支出记录</p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="px-6 mb-6">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-card border border-border p-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+              <Clock className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-2xl font-bold text-foreground">{allExpenses.length}</p>
+            <p className="text-xs text-muted-foreground">总记录</p>
+          </div>
+          <div className="rounded-2xl bg-card border border-border p-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+              <TrendingUp className="w-5 h-5 text-primary" />
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              RM {allExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(0)}
+            </p>
+            <p className="text-xs text-muted-foreground">总金额</p>
+          </div>
+        </div>
       </div>
 
       {/* Activity Timeline */}
-      <div className="px-5 space-y-6">
+      <div className="px-6 space-y-6">
         {Object.entries(groupedByDate).map(([date, expenses]) => (
           <div key={date}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               {formatDateHeader(date)}
             </h3>
             <div className="space-y-3">
-              {expenses.map((expense) => {
+              {expenses.map((expense, index) => {
                 const payer = getUserById(expense.paidBy)
                 const config = categoryConfig[expense.category as ExpenseCategory]
 
                 return (
-                  <Card 
+                  <div 
                     key={expense.id}
-                    className="p-4 cursor-pointer hover:shadow-md transition-all"
+                    className="animate-slide-up rounded-2xl bg-card border border-border p-4 cursor-pointer hover:border-primary/30 hover:shadow-lg transition-all active:scale-[0.98]"
+                    style={{ animationDelay: `${index * 50}ms` }}
                     onClick={() => onGroupSelect(expense.groupId)}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center text-xl', config.color)}>
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        'w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm',
+                        config.color
+                      )}>
                         {config.emoji}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -67,14 +91,14 @@ export function ActivityView({ onGroupSelect }: ActivityViewProps) {
                           {payer?.name} 支付 · {expense.groupEmoji} {expense.groupName}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p className="font-bold text-foreground">RM {expense.amount.toFixed(2)}</p>
                         <p className="text-xs text-muted-foreground">
                           {expense.splitBetween.length}人分摊
                         </p>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 )
               })}
             </div>
@@ -82,8 +106,8 @@ export function ActivityView({ onGroupSelect }: ActivityViewProps) {
         ))}
 
         {allExpenses.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+          <div className="rounded-2xl bg-card border border-border p-12 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
               <span className="text-3xl">📝</span>
             </div>
             <h3 className="font-semibold text-foreground mb-1">还没有支出记录</h3>

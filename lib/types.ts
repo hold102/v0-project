@@ -41,11 +41,11 @@ export type ExpenseCategory =
   | 'other'
 
 export const categoryConfig: Record<ExpenseCategory, { label: string; emoji: string; color: string }> = {
-  food: { label: '餐饮', emoji: '🍜', color: 'bg-orange-100 text-orange-700' },
-  transport: { label: '交通', emoji: '🚗', color: 'bg-blue-100 text-blue-700' },
-  entertainment: { label: '娱乐', emoji: '🎬', color: 'bg-pink-100 text-pink-700' },
-  shopping: { label: '购物', emoji: '🛍️', color: 'bg-purple-100 text-purple-700' },
-  accommodation: { label: '住宿', emoji: '🏨', color: 'bg-teal-100 text-teal-700' },
-  utilities: { label: '水电', emoji: '💡', color: 'bg-yellow-100 text-yellow-700' },
-  other: { label: '其他', emoji: '📦', color: 'bg-gray-100 text-gray-700' },
+  food: { label: '餐饮', emoji: '🍜', color: 'bg-amber-100 border border-amber-200' },
+  transport: { label: '交通', emoji: '🚗', color: 'bg-sky-100 border border-sky-200' },
+  entertainment: { label: '娱乐', emoji: '🎬', color: 'bg-rose-100 border border-rose-200' },
+  shopping: { label: '购物', emoji: '🛍️', color: 'bg-violet-100 border border-violet-200' },
+  accommodation: { label: '住宿', emoji: '🏨', color: 'bg-emerald-100 border border-emerald-200' },
+  utilities: { label: '水电', emoji: '💡', color: 'bg-yellow-100 border border-yellow-200' },
+  other: { label: '其他', emoji: '📦', color: 'bg-slate-100 border border-slate-200' },
 }
