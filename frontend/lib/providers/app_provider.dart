@@ -15,8 +15,10 @@
  * fires in the background (fire-and-forget). The local SQLite cache is
  * updated after every change.
  */
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/user.dart';
 import 'package:splitease/models/group.dart';
@@ -126,19 +128,63 @@ List<Group> createMockGroups() {
   ];
 }
 
+// SharedPreferences key for persisting the logged-in user
+const _kCurrentUserKey = 'splitease_current_user';
+
 class AppProvider extends ChangeNotifier {
   User? _currentUser;                               // null = not logged in
   List<User> users = List.unmodifiable(mockUsers);  // all known users
   List<Group> groups = [];                           // groups visible to current user
   bool _loading = false;                             // true while loadData is fetching
   bool _authLoading = false;                         // true while login/register is in progress
+  bool _sessionRestored = false;                     // true once the persisted session check is done
   String? _authError;                                // error message from last auth attempt
 
   bool get loading => _loading;
   bool get authLoading => _authLoading;
+  bool get sessionRestored => _sessionRestored;
   String? get authError => _authError;
   bool get isAuthenticated => _currentUser != null;
   User get currentUser => _currentUser ?? users.first;
+
+  // Restore the persisted session on cold start. Call this once from main().
+  Future<void> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kCurrentUserKey);
+      if (raw != null) {
+        final user = User.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        _currentUser = user;
+        users = _upsertUser(users, user);
+        await loadData();
+        users = _upsertUser(users, user);
+      }
+    } catch (_) {
+      // If restoring fails (corrupted data, etc.), stay logged out
+      await _clearPersistedSession();
+    } finally {
+      _sessionRestored = true;
+      notifyListeners();
+    }
+  }
+
+  // Persist the current user to SharedPreferences
+  Future<void> _persistSession(User user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kCurrentUserKey, jsonEncode(user.toJson()));
+    } catch (_) {
+      // Silently ignore — the user is still logged in for this session
+    }
+  }
+
+  // Clear the persisted session from SharedPreferences
+  Future<void> _clearPersistedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kCurrentUserKey);
+    } catch (_) {}
+  }
 
   // 3-tier loading: API → local cache → mock data
   Future<void> loadData() async {
@@ -236,20 +282,22 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  // Post-login/register: set the current user, reload data, sync user into list
+  // Post-login/register: set the current user, persist the session, reload data
   Future<void> _completeAuth(User user) async {
     _authError = null;
     _currentUser = user;
     users = _upsertUser(users, user);  // Ensure the user exists in the list
+    await _persistSession(user);        // Save to SharedPreferences / localStorage
     await loadData();                   // Fetch fresh data from API/cache
     users = _upsertUser(users, user);  // Re-upsert after data reload (loadData may replace users)
     _authLoading = false;
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
     _currentUser = null;
     _authError = null;
+    await _clearPersistedSession();    // Remove from SharedPreferences / localStorage
     notifyListeners();
   }
 
