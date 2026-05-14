@@ -1,10 +1,16 @@
 /*
  * api_service.dart — HTTP client for the Express backend
  *
- * Singleton (one instance shared app-wide). Base URL adapts to the platform:
- *   - Android emulator: 10.0.2.2 (maps to host machine's localhost)
- *   - Web non-localhost: uses the configured _hostIp (Mac's LAN IP)
- *   - iOS / Web localhost: localhost:5001
+ * Singleton (one instance shared app-wide). Base URL resolution:
+ *   1. If --dart-define=API_BASE_URL=... is provided at build time, use it verbatim.
+ *   2. Otherwise pick a default per platform:
+ *        - Android emulator -> http://10.0.2.2:5001/api  (host machine's localhost)
+ *        - Web non-localhost -> http://$apiHostIp:5001/api  (override via --dart-define=API_HOST_IP)
+ *        - iOS / desktop / web localhost -> http://localhost:5001/api
+ *
+ * Examples:
+ *   flutter run --dart-define=API_BASE_URL=http://localhost:5001/api
+ *   flutter run --dart-define=API_HOST_IP=192.168.1.42       # phone on same LAN
  *
  * Every method returns parsed model objects. On error, throws ApiException.
  */
@@ -33,10 +39,17 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._();
 
-  // Change this to your Mac's local IP when testing from a phone on the same network
-  static const String _hostIp = '192.168.100.179';
+  // Build-time overrides (set with `flutter run --dart-define=KEY=value`).
+  // API_BASE_URL — full override; if set, all platform logic below is skipped.
+  // API_HOST_IP  — LAN IP used only when the web app is served from a non-localhost
+  //                origin (e.g. testing on a phone). Defaults to 'localhost'.
+  static const String _baseUrlOverride =
+      String.fromEnvironment('API_BASE_URL', defaultValue: '');
+  static const String _hostIp =
+      String.fromEnvironment('API_HOST_IP', defaultValue: 'localhost');
 
   String get _baseUrl {
+    if (_baseUrlOverride.isNotEmpty) return _baseUrlOverride;
     if (kIsWeb) {
       return _isLocalhost
           ? 'http://localhost:5001/api'
