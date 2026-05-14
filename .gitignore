@@ -1,15 +1,22 @@
-# v0 sandbox internal files
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-.snowflake/
-.v0-trash/
-.vercel/
-
-# Environment variables
-.env*.local
-
-# Common ignores
-node_modules
-.next/
 .DS_Store
+
+# Environment
+.env
+.env.*
+
+# Node backend
+backend/node_modules/
+backend/data/app-db.json
+backend/data/*.tmp
+npm-debug.log*
+
+# Flutter frontend
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+
+# IDE/editor
+.idea/
+.vscode/
