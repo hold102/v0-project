@@ -126,62 +126,100 @@ List<Group> createMockGroups() {
   ];
 }
 
+enum DataSource { loading, api, cache, mock }
+
 class AppProvider extends ChangeNotifier {
   User? _currentUser;                               // null = not logged in
+  DataSource _dataSource = DataSource.loading;
   List<User> users = List.unmodifiable(mockUsers);  // all known users
   List<Group> groups = [];                           // groups visible to current user
   bool _loading = false;                             // true while loadData is fetching
   bool _authLoading = false;                         // true while login/register is in progress
   String? _authError;                                // error message from last auth attempt
+  String? _lastSyncError;                            // last backend write that failed, for UI banners
 
   bool get loading => _loading;
   bool get authLoading => _authLoading;
   String? get authError => _authError;
+  String? get lastSyncError => _lastSyncError;
+  DataSource get dataSource => _dataSource;
+  bool get isUsingMockData => _dataSource == DataSource.mock;
   bool get isAuthenticated => _currentUser != null;
   User get currentUser => _currentUser ?? users.first;
+
+  void clearSyncError() {
+    if (_lastSyncError == null) return;
+    _lastSyncError = null;
+    notifyListeners();
+  }
 
   // 3-tier loading: API → local cache → mock data
   Future<void> loadData() async {
     _loading = true;
+    _dataSource = DataSource.loading;
     notifyListeners();
 
+    Object? apiError;
     try {
-      // 1. Try the backend API first
       final apiUsers = await ApiService().getUsers();
       final apiGroups = await ApiService().getGroups();
       if (apiUsers.isNotEmpty || apiGroups.isNotEmpty) {
         groups = apiGroups;
         users = apiUsers.isNotEmpty ? apiUsers : users;
+        // Sync the canonical "current user" from the backend so any writes
+        // (create group, add expense) pass server-side currentUserId checks.
+        // Skip if a real authenticated _currentUser is already set.
+        if (_currentUser == null) {
+          try {
+            final id = await ApiService().getCurrentUserId();
+            if (id != null) {
+              final match = users.where((u) => u.id == id).toList();
+              if (match.isNotEmpty) _currentUser = match.first;
+            }
+          } catch (e, s) {
+            developer.log('loadData: getCurrentUserId failed',
+                error: e, stackTrace: s, name: 'AppProvider');
+          }
+        }
         _ensureCurrentUserInUsers();
-        // Cache the fresh data for offline use
         _cacheToLocalDb(users, apiGroups);
+        _dataSource = DataSource.api;
         _loading = false;
         notifyListeners();
         return;
       }
-    } catch (_) {
-      // API unreachable — fall through to local cache
+    } catch (e, s) {
+      apiError = e;
+      developer.log('loadData: API unreachable',
+          error: e, stackTrace: s, name: 'AppProvider');
     }
 
     try {
-      // 2. Try local SQLite cache (populated from the previous API call)
       final cachedUsers = await LocalDbService().getAllUsers();
       final cachedGroups = await LocalDbService().getAllGroups();
       if (cachedGroups.isNotEmpty) {
         groups = cachedGroups;
         users = cachedUsers;
         _ensureCurrentUserInUsers();
+        _dataSource = DataSource.cache;
+        if (apiError != null) {
+          _lastSyncError = 'Backend unreachable — showing cached data. ($apiError)';
+        }
         _loading = false;
         notifyListeners();
         return;
       }
-    } catch (_) {
-      // Local DB unavailable — fall through to mock
+    } catch (e, s) {
+      developer.log('loadData: local cache unavailable',
+          error: e, stackTrace: s, name: 'AppProvider');
     }
 
-      // 3. Last resort: show hardcoded demo data so the app isn't blank
     groups = createMockGroups();
     _ensureCurrentUserInUsers();
+    _dataSource = DataSource.mock;
+    _lastSyncError = apiError != null
+        ? 'Backend unreachable — showing demo data. ($apiError)'
+        : 'Showing demo data — no backend or cache available.';
     _loading = false;
     notifyListeners();
   }
@@ -301,29 +339,42 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  // Optimistic add: update UI immediately, sync to backend in background
+  // Optimistic add: update UI immediately, sync to backend in background.
+  // The current user is auto-included in the member list — the backend requires
+  // the logged-in user to be a member of any group they create.
   Group addGroup(String name, String emoji, List<User> members) {
+    final me = currentUser;
+    final dedupedMembers = [
+      me,
+      ...members.where((m) => m.id != me.id),
+    ];
+
     final newGroup = Group(
-      id: 'g${DateTime.now().millisecondsSinceEpoch}',  // Client-generated ID
+      id: 'g${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       emoji: emoji,
-      members: members,
+      members: dedupedMembers,
       expenses: [],
       createdAt: DateTime.now().toIso8601String().split('T')[0],
     );
     groups = [...groups, newGroup];
     notifyListeners();
 
-    // Sync to backend and persist locally (fire-and-forget — errors are logged so the dev console surfaces them)
+    // Sync to backend; on failure revert the optimistic add and expose the error
+    // via lastSyncError so the UI can show a banner / snackbar.
     ApiService()
-        .createGroup(name, emoji, members.map((m) => m.id).toList(),
+        .createGroup(name, emoji, dedupedMembers.map((m) => m.id).toList(),
             id: newGroup.id)
-        .catchError((Object e, StackTrace s) {
+        .then((_) {
+      _cacheToLocalDb(users, groups);
+    }).catchError((Object e, StackTrace s) {
       developer.log('createGroup failed',
           error: e, stackTrace: s, name: 'AppProvider');
-      return newGroup;
+      groups = groups.where((g) => g.id != newGroup.id).toList();
+      _lastSyncError = 'Could not save group "$name": $e';
+      notifyListeners();
+      _cacheToLocalDb(users, groups);
     });
-    _cacheToLocalDb(users, groups);
     return newGroup;
   }
 
@@ -333,13 +384,20 @@ class AppProvider extends ChangeNotifier {
     String? emoji,
     List<User>? members,
   }) {
+    final me = currentUser;
+    // Same backend constraint as addGroup: current user must remain a member.
+    final dedupedMembers = members == null
+        ? null
+        : [me, ...members.where((m) => m.id != me.id)];
+
+    final previousGroups = groups;
     groups = groups.map((g) {
       if (g.id != groupId) return g;
       return Group(
         id: g.id,
         name: name ?? g.name,
         emoji: emoji ?? g.emoji,
-        members: members ?? g.members,
+        members: dedupedMembers ?? g.members,
         expenses: g.expenses,
         createdAt: g.createdAt,
       );
@@ -351,14 +409,18 @@ class AppProvider extends ChangeNotifier {
           groupId: groupId,
           name: name,
           emoji: emoji,
-          memberIds: members?.map((m) => m.id).toList(),
+          memberIds: dedupedMembers?.map((m) => m.id).toList(),
         )
-        .catchError((Object e, StackTrace s) {
+        .then((_) {
+      _cacheToLocalDb(users, groups);
+    }).catchError((Object e, StackTrace s) {
       developer.log('updateGroup failed',
           error: e, stackTrace: s, name: 'AppProvider');
-      throw e;
+      groups = previousGroups;
+      _lastSyncError = 'Could not update group: $e';
+      notifyListeners();
+      _cacheToLocalDb(users, groups);
     });
-    _cacheToLocalDb(users, groups);
   }
 
   void deleteGroup(String groupId) {
@@ -396,16 +458,32 @@ class AppProvider extends ChangeNotifier {
           amount: expense.amount,
           paidBy: expense.paidBy,
           splitBetween: expense.splitBetween,
+          splitAmounts: expense.splitAmounts,
           category: expense.category.name,
           date: expense.date,
           id: expense.id,
         )
-        .catchError((Object e, StackTrace s) {
+        .then((_) {
+      _cacheToLocalDb(users, groups);
+    }).catchError((Object e, StackTrace s) {
       developer.log('addExpense failed',
           error: e, stackTrace: s, name: 'AppProvider');
-      return expense;
+      // Revert the optimistic add so the UI matches reality.
+      groups = groups.map((g) {
+        if (g.id != groupId) return g;
+        return Group(
+          id: g.id,
+          name: g.name,
+          emoji: g.emoji,
+          members: g.members,
+          expenses: g.expenses.where((e) => e.id != expense.id).toList(),
+          createdAt: g.createdAt,
+        );
+      }).toList();
+      _lastSyncError = 'Could not save expense "${expense.description}": $e';
+      notifyListeners();
+      _cacheToLocalDb(users, groups);
     });
-    _cacheToLocalDb(users, groups);
   }
 
   void updateExpense(String groupId, Expense expense) {
@@ -495,13 +573,14 @@ class AppProvider extends ChangeNotifier {
       balanceMap[m.id] = 0;
     }
 
-    // Step 2: For each expense, credit the payer and debit the splitters
+    // Step 2: For each expense, credit the payer and debit each splitter.
+    // Per-user share uses expense.splitAmounts when set, otherwise equal split.
     for (final expense in group.expenses) {
-      final splitAmount = expense.amount / expense.splitBetween.length;
       balanceMap[expense.paidBy] =
-          (balanceMap[expense.paidBy] ?? 0) + expense.amount;  // Full amount back to payer
+          (balanceMap[expense.paidBy] ?? 0) + expense.amount;
       for (final userId in expense.splitBetween) {
-        balanceMap[userId] = (balanceMap[userId] ?? 0) - splitAmount;  // Deduct share
+        final share = expense.shareFor(userId);
+        balanceMap[userId] = (balanceMap[userId] ?? 0) - share;
       }
     }
 

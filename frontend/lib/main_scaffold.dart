@@ -7,6 +7,8 @@
  * staying in the tab, so it doesn't interfere with the bottom nav.
  */
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/screens/home_screen.dart';
 import 'package:splitease/screens/groups_screen.dart';
 import 'package:splitease/screens/activity_screen.dart';
@@ -23,6 +25,7 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
+  String? _lastShownError;
 
   void _onTabChange(int index) {
     if (index == 2) {
@@ -49,6 +52,30 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final app = context.watch<AppProvider>();
+
+    // Surface any backend sync failure as a snackbar so the user sees what
+    // went wrong instead of staring at silently-disappearing data.
+    final err = app.lastSyncError;
+    if (err != null && err != _lastShownError) {
+      _lastShownError = err;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.clearSnackBars();
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(err),
+            duration: const Duration(seconds: 6),
+            backgroundColor: Colors.red.shade700,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () => app.clearSyncError(),
+            ),
+          ),
+        );
+      });
+    }
 
     final screens = [
       HomeScreen(onGroupSelect: _onGroupSelect),

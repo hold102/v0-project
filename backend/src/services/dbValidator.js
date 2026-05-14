@@ -62,6 +62,35 @@ function validateExpense(expense) {
   }
   assertString(expense.date, "Expense date is required.");
   assertString(expense.groupId, "Expense group id is required.");
+
+  // Optional per-member split amounts. If present, each key must be in
+  // splitBetween, each value must be a positive number, and the sum must
+  // match the expense amount within 1 cent.
+  if (expense.splitAmounts !== undefined && expense.splitAmounts !== null) {
+    if (!isObject(expense.splitAmounts)) {
+      throw new Error("Expense splitAmounts must be an object keyed by user id.");
+    }
+    const splitSet = new Set(expense.splitBetween);
+    let total = 0;
+    for (const [userId, amount] of Object.entries(expense.splitAmounts)) {
+      if (!splitSet.has(userId)) {
+        throw new Error(`splitAmounts contains user id ${userId} not in splitBetween.`);
+      }
+      if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
+        throw new Error("splitAmounts values must be non-negative numbers.");
+      }
+      total += amount;
+    }
+    const keys = Object.keys(expense.splitAmounts);
+    if (keys.length > 0 && keys.length !== expense.splitBetween.length) {
+      throw new Error("splitAmounts must cover every split member or be empty.");
+    }
+    if (keys.length > 0 && Math.abs(total - expense.amount) > 0.01) {
+      throw new Error(
+        `splitAmounts must sum to the expense amount (got ${total.toFixed(2)}, expected ${expense.amount.toFixed(2)}).`
+      );
+    }
+  }
 }
 
 function validateSettlement(settlement) {

@@ -78,3 +78,21 @@ test("clone produces a deep copy", () => {
   copy.groups[0].expenses[0].amount = 999;
   assert.equal(db.groups[0].expenses[0].amount, 30);
 });
+
+test("validateDb accepts an expense with custom splitAmounts that sum correctly", () => {
+  const db = validDb();
+  db.groups[0].expenses[0].splitAmounts = { u1: 10, u2: 20 };
+  assert.doesNotThrow(() => validateDb(db));
+});
+
+test("validateDb rejects splitAmounts that don't sum to expense amount", () => {
+  const db = validDb();
+  db.groups[0].expenses[0].splitAmounts = { u1: 5, u2: 20 };
+  assert.throws(() => validateDb(db), /splitAmounts must sum/);
+});
+
+test("validateDb rejects splitAmounts referencing a non-split member", () => {
+  const db = validDb();
+  db.groups[0].expenses[0].splitAmounts = { u1: 10, u_outsider: 20 };
+  assert.throws(() => validateDb(db), /not in splitBetween/);
+});

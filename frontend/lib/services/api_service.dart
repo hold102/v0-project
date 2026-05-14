@@ -4,13 +4,11 @@
  * Singleton (one instance shared app-wide). Base URL resolution:
  *   1. If --dart-define=API_BASE_URL=... is provided at build time, use it verbatim.
  *   2. Otherwise pick a default per platform:
- *        - Android emulator -> http://10.0.2.2:5001/api  (host machine's localhost)
- *        - Web non-localhost -> http://$apiHostIp:5001/api  (override via --dart-define=API_HOST_IP)
- *        - iOS / desktop / web localhost -> http://localhost:5001/api
- *
- * Examples:
- *   flutter run --dart-define=API_BASE_URL=http://localhost:5001/api
- *   flutter run --dart-define=API_HOST_IP=192.168.1.42       # phone on same LAN
+ *        - Web -> http://<page host>:5001/api  (uses the URL the page was served from,
+ *          so localhost, 127.0.0.1, AND LAN IPs all work with no config)
+ *        - Android emulator -> http://10.0.2.2:5001/api  (maps to host machine)
+ *        - iOS simulator / desktop -> http://localhost:5001/api
+ *        - Real mobile device -> --dart-define=API_BASE_URL=http://<mac-lan-ip>:5001/api
  *
  * Every method returns parsed model objects. On error, throws ApiException.
  */
@@ -39,31 +37,27 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._();
 
-  // Build-time overrides (set with `flutter run --dart-define=KEY=value`).
-  // API_BASE_URL — full override; if set, all platform logic below is skipped.
-  // API_HOST_IP  — LAN IP used only when the web app is served from a non-localhost
-  //                origin (e.g. testing on a phone). Defaults to 'localhost'.
+  // Optional full override — set with `flutter run --dart-define=API_BASE_URL=...`
   static const String _baseUrlOverride =
       String.fromEnvironment('API_BASE_URL', defaultValue: '');
-  static const String _hostIp =
-      String.fromEnvironment('API_HOST_IP', defaultValue: 'localhost');
 
   String get _baseUrl {
     if (_baseUrlOverride.isNotEmpty) return _baseUrlOverride;
     if (kIsWeb) {
-      return _isLocalhost
-          ? 'http://localhost:5001/api'
-          : 'http://$_hostIp:5001/api';
+      // Use whatever host served the page — localhost, 127.0.0.1, or LAN IP all work.
+      final host = _webHost();
+      return 'http://$host:5001/api';
     }
-    if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';  // Android emulator → host machine
+    if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';  // Android emulator
     return 'http://localhost:5001/api';  // iOS simulator / desktop
   }
 
-  bool get _isLocalhost {
+  String _webHost() {
     try {
-      return Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1';
+      final host = Uri.base.host;
+      return host.isEmpty ? 'localhost' : host;
     } catch (_) {
-      return true;
+      return 'localhost';
     }
   }
 
@@ -161,6 +155,15 @@ class ApiService {
     return list.map((j) => User.fromJson(j)).toList();
   }
 
+  // Returns the backend's canonical app state; we only need currentUserId here
+  // so the Flutter "current user" matches what the backend enforces.
+  Future<String?> getCurrentUserId() async {
+    final res = await http.get(Uri.parse('$_baseUrl/app-state'));
+    final json = _decodeObjectResponse(res);
+    final id = json['currentUserId'];
+    return id is String ? id : null;
+  }
+
   Future<User> getUserById(String id) async {
     final res = await http.get(Uri.parse('$_baseUrl/users/$id'));
     return User.fromJson(_decodeObjectResponse(res));
@@ -224,6 +227,7 @@ class ApiService {
     required String paidBy,
     required List<String> splitBetween,
     required String category,
+    Map<String, double>? splitAmounts,
     String? date,
     String? id,
   }) async {
@@ -235,6 +239,9 @@ class ApiService {
       'category': category,
       'date': date ?? DateTime.now().toIso8601String().split('T')[0],
     };
+    if (splitAmounts != null && splitAmounts.isNotEmpty) {
+      body['splitAmounts'] = splitAmounts;
+    }
     if (id != null) body['id'] = id;
     final res = await http.post(
       Uri.parse('$_baseUrl/groups/$groupId/expenses'),
@@ -268,6 +275,7 @@ class ApiService {
     double? amount,
     String? paidBy,
     List<String>? splitBetween,
+    Map<String, double>? splitAmounts,
     String? category,
     String? date,
   }) async {
@@ -276,6 +284,7 @@ class ApiService {
     if (amount != null) body['amount'] = amount;
     if (paidBy != null) body['paidBy'] = paidBy;
     if (splitBetween != null) body['splitBetween'] = splitBetween;
+    if (splitAmounts != null) body['splitAmounts'] = splitAmounts;
     if (category != null) body['category'] = category;
     if (date != null) body['date'] = date;
 

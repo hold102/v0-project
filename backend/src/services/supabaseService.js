@@ -16,6 +16,29 @@ const { clone, validateDb } = require("./dbValidator");
 // A promise-based queue: each write waits for the previous one to finish
 let updateQueue = Promise.resolve();
 
+// Detect whether migration 002 has been applied (amount column exists).
+// Cached after first probe to avoid hitting the DB on every read.
+let splitAmountColumnAvailable = null;
+async function probeSplitAmountColumn() {
+  if (splitAmountColumnAvailable !== null) return splitAmountColumnAvailable;
+  const probe = await supabase
+    .from("expense_split_members")
+    .select("amount")
+    .limit(1);
+  const missing =
+    probe.error &&
+    /column.*amount.*does not exist|amount.*does not exist/i.test(probe.error.message || "");
+  if (missing) {
+    splitAmountColumnAvailable = false;
+    console.warn(
+      "[supabaseService] expense_split_members.amount not found — migration 002_split_amounts.sql not applied. Custom split shares will be ignored until you run it."
+    );
+  } else {
+    splitAmountColumnAvailable = true;
+  }
+  return splitAmountColumnAvailable;
+}
+
 // Map a Supabase account row (snake_case) to in-memory format (camelCase)
 function accountToMemory(row) {
   return {
@@ -27,9 +50,10 @@ function accountToMemory(row) {
   };
 }
 
-// Map a Supabase expense row (snake_case) to in-memory format (camelCase)
-function expenseToMemory(row, splitBetween) {
-  return {
+// Map a Supabase expense row (snake_case) to in-memory format (camelCase).
+// splitAmounts is included only when at least one split row has an explicit amount.
+function expenseToMemory(row, splitBetween, splitAmounts) {
+  const expense = {
     id: row.id,
     description: row.description,
     amount: typeof row.amount === "number" ? row.amount : Number(row.amount),
@@ -39,6 +63,10 @@ function expenseToMemory(row, splitBetween) {
     date: row.date,
     groupId: row.group_id,
   };
+  if (splitAmounts && Object.keys(splitAmounts).length > 0) {
+    expense.splitAmounts = splitAmounts;
+  }
+  return expense;
 }
 
 // Map a Supabase settlement row (snake_case) to in-memory format (camelCase)
@@ -55,6 +83,12 @@ function settlementToMemory(row) {
 
 // Assemble the full in-memory database from Supabase tables
 async function readDb() {
+  // Decide split-members select based on whether migration 002 is applied.
+  const hasAmount = await probeSplitAmountColumn();
+  const splitMembersSelect = hasAmount
+    ? "expense_id, user_id, amount"
+    : "expense_id, user_id";
+
   // Query all tables in parallel
   const [
     { data: users, error: usersErr },
@@ -72,7 +106,7 @@ async function readDb() {
     supabase.from("groups_table").select("id, name, emoji, created_at"),
     supabase.from("group_members").select("group_id, user_id"),
     supabase.from("expenses").select("id, description, amount, paid_by, category, date, group_id"),
-    supabase.from("expense_split_members").select("expense_id, user_id"),
+    supabase.from("expense_split_members").select(splitMembersSelect),
     supabase.from("settlements").select("id, group_id, from_user, to_user, amount, date"),
   ]);
 
@@ -103,18 +137,26 @@ async function readDb() {
     memberMap.get(gm.group_id).push(gm.user_id);
   });
 
-  // Expense split members: Map<expenseId, userId[]>
+  // Expense split members: Map<expenseId, userId[]> + Map<expenseId, {userId: amount}>
   const splitMap = new Map();
+  const splitAmountsMap = new Map();
   (splitMembers || []).forEach((sm) => {
     if (!splitMap.has(sm.expense_id)) splitMap.set(sm.expense_id, []);
     splitMap.get(sm.expense_id).push(sm.user_id);
+
+    if (sm.amount !== null && sm.amount !== undefined) {
+      if (!splitAmountsMap.has(sm.expense_id)) splitAmountsMap.set(sm.expense_id, {});
+      splitAmountsMap.get(sm.expense_id)[sm.user_id] =
+        typeof sm.amount === "number" ? sm.amount : Number(sm.amount);
+    }
   });
 
   // Expenses by group: Map<groupId, expense[]>
   const expenseMap = new Map();
   (expenses || []).forEach((exp) => {
     const splitBetween = splitMap.get(exp.id) || [];
-    const memExp = expenseToMemory(exp, splitBetween);
+    const splitAmounts = splitAmountsMap.get(exp.id);
+    const memExp = expenseToMemory(exp, splitBetween, splitAmounts);
     if (!expenseMap.has(exp.group_id)) expenseMap.set(exp.group_id, []);
     expenseMap.get(exp.group_id).push(memExp);
   });

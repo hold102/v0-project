@@ -20,6 +20,8 @@ class AddExpenseScreen extends StatefulWidget {
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
+enum _SplitMode { equal, exact }
+
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
   int _step = 0; // 0=select group, 1=details, 2=split
   String _selectedGroupId = '';
@@ -28,6 +30,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   ExpenseCategory _category = ExpenseCategory.food;
   String _paidBy = '';
   List<String> _splitBetween = [];
+
+  // Split mode: equal = total/N for each member. exact = per-user dollar inputs.
+  _SplitMode _splitMode = _SplitMode.equal;
+  // Controllers + current value for each user's exact share. Only used in exact mode.
+  final Map<String, TextEditingController> _exactControllers = {};
+  final Map<String, double> _exactAmounts = {};
 
   // New group fields
   bool _isCreating = false;
@@ -62,6 +70,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _category = e.category;
       _paidBy = e.paidBy;
       _splitBetween = List<String>.from(e.splitBetween);
+      // Restore exact-mode if the existing expense uses custom amounts.
+      if (e.splitAmounts != null && e.splitAmounts!.isNotEmpty) {
+        _splitMode = _SplitMode.exact;
+        _exactAmounts.addAll(e.splitAmounts!);
+      }
       _step = 1;
       _selectedMembers = [app.currentUser.id];
     } else if (widget.groupId != null) {
@@ -75,7 +88,56 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   void dispose() {
     _descFocus.dispose();
+    for (final c in _exactControllers.values) {
+      c.dispose();
+    }
     super.dispose();
+  }
+
+  // Make sure each member in _splitBetween has a controller in exact mode.
+  // Removes controllers for members no longer in the list. Initial value:
+  // existing _exactAmounts entry, else equal share of the total amount.
+  void _syncExactControllers() {
+    final amount = double.tryParse(_amount) ?? 0;
+    final equalShare =
+        _splitBetween.isNotEmpty ? amount / _splitBetween.length : 0.0;
+
+    // Drop controllers for users no longer participating.
+    final stale = _exactControllers.keys
+        .where((id) => !_splitBetween.contains(id))
+        .toList();
+    for (final id in stale) {
+      _exactControllers.remove(id)?.dispose();
+      _exactAmounts.remove(id);
+    }
+
+    // Add controllers for newly added members.
+    for (final id in _splitBetween) {
+      if (!_exactControllers.containsKey(id)) {
+        final seed = _exactAmounts[id] ?? equalShare;
+        final c = TextEditingController(text: seed.toStringAsFixed(2));
+        c.addListener(() {
+          final v = double.tryParse(c.text);
+          setState(() {
+            if (v != null && v >= 0) {
+              _exactAmounts[id] = v;
+            } else {
+              _exactAmounts.remove(id);
+            }
+          });
+        });
+        _exactControllers[id] = c;
+        _exactAmounts[id] = seed;
+      }
+    }
+  }
+
+  double get _exactSum =>
+      _exactAmounts.values.fold<double>(0, (s, v) => s + v);
+
+  bool get _exactSumMatches {
+    final amount = double.tryParse(_amount) ?? 0;
+    return (_exactSum - amount).abs() <= 0.01;
   }
 
   void _nextStep() => setState(() => _step = (_step + 1).clamp(0, 2));
@@ -114,6 +176,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         _splitBetween.isEmpty) {
       return;
     }
+    // In exact mode, enforce sum-matches before letting the user save.
+    if (_splitMode == _SplitMode.exact && !_exactSumMatches) return;
+
+    // Build splitAmounts (only when in exact mode and the set covers everyone).
+    final Map<String, double>? splitAmounts = _splitMode == _SplitMode.exact
+        ? {
+            for (final id in _splitBetween)
+              id: (_exactAmounts[id] ?? 0).toDouble(),
+          }
+        : null;
 
     final app = context.read<AppProvider>();
     final isEditing = widget.expense != null;
@@ -125,6 +197,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         amount: amount,
         paidBy: _paidBy,
         splitBetween: _splitBetween,
+        splitAmounts: splitAmounts,
         category: _category,
         date: widget.expense!.date,
         groupId: _selectedGroupId,
@@ -139,6 +212,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           amount: amount,
           paidBy: _paidBy,
           splitBetween: _splitBetween,
+          splitAmounts: splitAmounts,
           category: _category,
           date: DateTime.now().toIso8601String().split('T')[0],
           groupId: _selectedGroupId,
@@ -704,6 +778,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final perPerson =
         _splitBetween.isNotEmpty ? amount / _splitBetween.length : 0;
 
+    // Keep controllers in sync with the current splitBetween + amount.
+    if (_splitMode == _SplitMode.exact) {
+      _syncExactControllers();
+    }
+    final remaining = amount - _exactSum;
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       children: [
@@ -770,7 +850,91 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
+        // Split-mode toggle: Equal vs Exact
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _SplitModeChip(
+                  label: 'Equal',
+                  selected: _splitMode == _SplitMode.equal,
+                  onTap: () => setState(() {
+                    _splitMode = _SplitMode.equal;
+                    // discard any partial exact data
+                    for (final c in _exactControllers.values) {
+                      c.dispose();
+                    }
+                    _exactControllers.clear();
+                    _exactAmounts.clear();
+                  }),
+                ),
+              ),
+              Expanded(
+                child: _SplitModeChip(
+                  label: 'Exact amounts',
+                  selected: _splitMode == _SplitMode.exact,
+                  onTap: () => setState(() {
+                    _splitMode = _SplitMode.exact;
+                    _syncExactControllers();
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_splitMode == _SplitMode.exact) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _exactSumMatches
+                  ? Colors.green.withValues(alpha: 0.08)
+                  : Colors.orange.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _exactSumMatches
+                    ? Colors.green.withValues(alpha: 0.4)
+                    : Colors.orange.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _exactSumMatches
+                      ? Icons.check_circle_rounded
+                      : Icons.error_outline_rounded,
+                  size: 18,
+                  color:
+                      _exactSumMatches ? Colors.green.shade700 : Colors.orange.shade800,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _exactSumMatches
+                        ? 'Amounts match total — ready to save.'
+                        : remaining > 0
+                            ? 'Remaining: RM ${remaining.toStringAsFixed(2)} unassigned'
+                            : 'Over by RM ${(-remaining).toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _exactSumMatches
+                          ? Colors.green.shade800
+                          : Colors.orange.shade900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
         Text('Who should split this?',
             style: TextStyle(
                 color: Colors.grey.shade700,
@@ -829,13 +993,37 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             style: const TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 15)),
                       ),
-                      if (isIncluded)
+                      if (isIncluded && _splitMode == _SplitMode.equal)
                         Text('RM ${perPerson.toStringAsFixed(2)}',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: Theme.of(context).colorScheme.primary,
                             )),
+                      if (isIncluded && _splitMode == _SplitMode.exact)
+                        SizedBox(
+                          width: 90,
+                          child: TextField(
+                            controller: _exactControllers[m.id],
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              prefixText: 'RM ',
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                        ),
                       const SizedBox(width: 10),
                       Container(
                         width: 24,
@@ -881,10 +1069,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                onPressed:
-                    amount > 0 && _paidBy.isNotEmpty && _splitBetween.isNotEmpty
-                        ? _submit
-                        : null,
+                onPressed: (amount > 0 &&
+                        _paidBy.isNotEmpty &&
+                        _splitBetween.isNotEmpty &&
+                        (_splitMode == _SplitMode.equal || _exactSumMatches))
+                    ? _submit
+                    : null,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -896,6 +1086,43 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _SplitModeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SplitModeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? scheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -84,6 +84,46 @@ function validateSplitMembers(value) {
   return splitBetween;
 }
 
+// Validate optional per-member dollar amounts for an unequal split.
+// Returns either an object keyed by userId, or undefined if the caller did
+// not provide custom amounts (meaning equal split).
+function validateSplitAmounts(raw, splitBetween, totalAmount) {
+  if (raw === undefined || raw === null) return undefined;
+  if (!isObject(raw)) {
+    throw new RequestError("splitAmounts must be an object keyed by user id.");
+  }
+  const keys = Object.keys(raw);
+  if (keys.length === 0) return undefined;
+
+  const splitSet = new Set(splitBetween);
+  const cleaned = {};
+  let total = 0;
+  for (const userId of keys) {
+    if (!splitSet.has(userId)) {
+      throw new RequestError(`splitAmounts contains user id ${userId} not in splitBetween.`);
+    }
+    const amount = raw[userId];
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
+      throw new RequestError("splitAmounts values must be non-negative numbers.");
+    }
+    const rounded = Math.round(amount * 100) / 100;
+    cleaned[userId] = rounded;
+    total += rounded;
+  }
+
+  if (keys.length !== splitBetween.length) {
+    throw new RequestError("splitAmounts must cover every split member.");
+  }
+
+  if (Math.abs(total - totalAmount) > 0.01) {
+    throw new RequestError(
+      `splitAmounts must sum to the expense amount (got ${total.toFixed(2)}, expected ${totalAmount.toFixed(2)}).`
+    );
+  }
+
+  return cleaned;
+}
+
 // Fetch a group by ID, ensuring the current user is a member.
 // Returns the same error (404) for non-existent groups and non-member access
 // to avoid leaking information about groups the user doesn't belong to.
@@ -116,6 +156,8 @@ function normalizeCreateExpense(body, groupIdFromParams) {
   const paidBy = normalizeText(source.paidBy);
   const splitBetween = validateSplitMembers(source.splitBetween);
   const category = normalizeText(source.category);
+  const amount = validateAmount(source.amount);
+  const splitAmounts = validateSplitAmounts(source.splitAmounts, splitBetween, amount);
 
   if (!description) {
     throw new RequestError("Expense description is required.");
@@ -133,9 +175,10 @@ function normalizeCreateExpense(body, groupIdFromParams) {
     id: normalizeOptionalId(source.id || body.id, "Expense id"),
     groupId,
     description,
-    amount: validateAmount(source.amount),
+    amount,
     paidBy,
     splitBetween,
+    splitAmounts,
     category,
     date: normalizeText(source.date) || todayIsoDate(),
   };
@@ -169,6 +212,12 @@ function normalizeUpdateExpense(body) {
     updates.splitBetween = validateSplitMembers(source.splitBetween);
   }
 
+  // splitAmounts is validated lazily in updateExpense once we have the
+  // final amount + splitBetween (it depends on both).
+  if (source.splitAmounts !== undefined) {
+    updates._splitAmountsRaw = source.splitAmounts;
+  }
+
   if (source.category !== undefined) {
     const category = normalizeText(source.category);
     if (!isExpenseCategory(category)) {
@@ -194,12 +243,16 @@ function calculateBalancesForGroup(group) {
   const balanceMap = new Map(group.members.map((member) => [member.id, 0]));
 
   group.expenses.forEach((expense) => {
-    const splitAmount = expense.amount / expense.splitBetween.length;
     // The payer gets credited the full amount
     balanceMap.set(expense.paidBy, (balanceMap.get(expense.paidBy) || 0) + expense.amount);
-    // Each split member gets debited their share
+
+    // Per-member share: explicit amount if splitAmounts is set, else equal split
+    const equalShare = expense.amount / expense.splitBetween.length;
     expense.splitBetween.forEach((userId) => {
-      balanceMap.set(userId, (balanceMap.get(userId) || 0) - splitAmount);
+      const share = expense.splitAmounts && typeof expense.splitAmounts[userId] === "number"
+        ? expense.splitAmounts[userId]
+        : equalShare;
+      balanceMap.set(userId, (balanceMap.get(userId) || 0) - share);
     });
   });
 
@@ -260,6 +313,7 @@ async function createExpense(body, options = {}) {
       amount: expenseData.amount,
       paidBy: expenseData.paidBy,
       splitBetween: expenseData.splitBetween,
+      splitAmounts: expenseData.splitAmounts,  // undefined = equal split
       category: expenseData.category,
       date: expenseData.date,
       groupId: group.id,
@@ -286,10 +340,27 @@ async function updateExpense(body, options = {}) {
       throw new RequestError("Expense not found.", 404);
     }
 
-    const nextExpense = { ...expense, ...updates };
+    const { _splitAmountsRaw, ...directUpdates } = updates;
+    const nextExpense = { ...expense, ...directUpdates };
     assertExpenseUsersBelongToGroup(group, nextExpense.paidBy, nextExpense.splitBetween);
 
-    Object.assign(expense, updates);
+    // Resolve splitAmounts against whichever amount + splitBetween end up effective.
+    if (_splitAmountsRaw !== undefined) {
+      directUpdates.splitAmounts = validateSplitAmounts(
+        _splitAmountsRaw,
+        nextExpense.splitBetween,
+        nextExpense.amount
+      );
+    } else if (
+      (directUpdates.splitBetween !== undefined || directUpdates.amount !== undefined) &&
+      expense.splitAmounts
+    ) {
+      // If split membership or amount changed but caller didn't send a new
+      // splitAmounts, drop the stale custom amounts (caller must re-supply).
+      directUpdates.splitAmounts = undefined;
+    }
+
+    Object.assign(expense, directUpdates);
     return { group, expense };
   });
 }
