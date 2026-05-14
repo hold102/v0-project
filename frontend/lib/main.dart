@@ -3,6 +3,11 @@
  * Sets up the Provider for state management, configures the Material theme,
  * and decides whether to show the auth screen or main scaffold based on
  * whether the user is authenticated.
+ *
+ * Session restoration: on cold start (including browser reload) we call
+ * restoreSession() before rendering anything. A loading indicator is shown
+ * until the check completes so the user never sees a flash of the auth screen
+ * when they have a valid persisted session.
  */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,13 +15,18 @@ import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/main_scaffold.dart';
 import 'package:splitease/screens/auth_screen.dart';
 
-void main() {
+void main() async {
   // Required for async operations before runApp (e.g., plugin init)
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Create the provider and restore any persisted session before rendering
+  final appProvider = AppProvider();
+  await appProvider.restoreSession();
+
   runApp(
     // ChangeNotifierProvider makes AppProvider available to all widgets in the tree
-    ChangeNotifierProvider(
-      create: (_) => AppProvider()..loadData(),  // ..loadData() calls it immediately after creation
+    ChangeNotifierProvider.value(
+      value: appProvider,
       child: const SplitEaseApp(),
     ),
   );
@@ -56,6 +66,13 @@ class SplitEaseApp extends StatelessWidget {
       // Consumer rebuilds when AppProvider notifies — switches between auth and main UI
       home: Consumer<AppProvider>(
         builder: (context, app, _) {
+          // Show a loading indicator until session restoration completes.
+          // This prevents a flash of the auth screen for users with a valid session.
+          if (!app.sessionRestored) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
           if (app.isAuthenticated) {
             return const MainScaffold();
           }

@@ -186,7 +186,7 @@ class ProfileScreen extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
-                  onTap: () => context.read<AppProvider>().logout(),
+                  onTap: () => context.read<AppProvider>().logout(),  // fire-and-forget: clears prefs then notifies
                 ),
               ),
             ),
