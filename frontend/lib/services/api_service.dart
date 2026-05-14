@@ -1,5 +1,15 @@
+/*
+ * api_service.dart — HTTP client for the Express backend
+ *
+ * Singleton (one instance shared app-wide). Base URL adapts to the platform:
+ *   - Android emulator: 10.0.2.2 (maps to host machine's localhost)
+ *   - Web non-localhost: uses the configured _hostIp (Mac's LAN IP)
+ *   - iOS / Web localhost: localhost:5001
+ *
+ * Every method returns parsed model objects. On error, throws ApiException.
+ */
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:splitease/models/user.dart';
@@ -18,17 +28,22 @@ class ApiException implements Exception {
 }
 
 class ApiService {
+  // Singleton pattern: one shared instance, lazy-initialised
   static final ApiService _instance = ApiService._();
   factory ApiService() => _instance;
   ApiService._();
 
-  // Change this to your Mac's local IP when testing from a phone
+  // Change this to your Mac's local IP when testing from a phone on the same network
   static const String _hostIp = '192.168.100.179';
 
   String get _baseUrl {
-    if (Platform.isAndroid) return 'http://10.0.2.2:3000/api';
-    if (kIsWeb && !_isLocalhost) return 'http://$_hostIp:3000/api';
-    return 'http://localhost:3000/api';
+    if (kIsWeb) {
+      return _isLocalhost
+          ? 'http://localhost:5001/api'
+          : 'http://$_hostIp:5001/api';
+    }
+    if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';  // Android emulator → host machine
+    return 'http://localhost:5001/api';  // iOS simulator / desktop
   }
 
   bool get _isLocalhost {
@@ -39,6 +54,7 @@ class ApiService {
     }
   }
 
+  // Decode a JSON object response, throw ApiException on non-2xx status
   Map<String, dynamic> _decodeObjectResponse(http.Response res) {
     final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -52,6 +68,7 @@ class ApiService {
     return decoded;
   }
 
+  // Decode a JSON array response
   List<dynamic> _decodeListResponse(http.Response res) {
     final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -258,19 +275,18 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> recordSettlement({
+    required String groupId,
     required String from,
     required String to,
     required double amount,
-    String? groupId,
   }) async {
     final res = await http.post(
-      Uri.parse('$_baseUrl/settlements'),
+      Uri.parse('$_baseUrl/groups/$groupId/settlements'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'from': from,
         'to': to,
         'amount': amount,
-        'groupId': groupId ?? 'g1',
       }),
     );
     return jsonDecode(res.body);

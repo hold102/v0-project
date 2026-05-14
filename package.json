@@ -7,7 +7,7 @@
     "backend:dev": "npm --prefix backend run dev",
     "backend:start": "npm --prefix backend start",
     "backend:check": "npm --prefix backend run check",
-    "frontend:run": "cd frontend && flutter run --dart-define=API_BASE_URL=http://localhost:3000",
+    "frontend:run": "cd frontend && flutter run --dart-define=API_BASE_URL=http://localhost:5001",
     "frontend:analyze": "cd frontend && flutter analyze",
     "frontend:test": "cd frontend && flutter test",
     "check": "npm run backend:check && npm run frontend:analyze && npm run frontend:test"

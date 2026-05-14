@@ -1,5 +1,19 @@
+/*
+ * expenseService.js — Expense business logic
+ *
+ * Responsibilities:
+ *   - Validate and normalise expense input (amount, payer, split members, category...)
+ *   - Enforce access control: only group members can see/modify expenses
+ *   - Calculate group balances (who owes whom)
+ *
+ * Balance calculation uses a simple greedy settlement algorithm:
+ *   1. Compute net balance for each member
+ *   2. Sort debtors (largest debt first) and creditors (largest credit first)
+ *   3. Greedily pair them up, producing a list of "A pays B $X" settlements
+ */
+
 const { createId, todayIsoDate } = require("./idService");
-const { readDb, updateDb } = require("./dbService");
+const { readDb, updateDb } = require("./supabaseService");
 const { isExpenseCategory } = require("../models/categories");
 const { RequestError } = require("../models/requestError");
 
@@ -20,6 +34,7 @@ function normalizeOptionalId(value, label) {
   return id;
 }
 
+// Expenses can be sent as { expense: {...} } or as a flat object — normalise here
 function normalizeExpenseSource(body) {
   if (!isObject(body)) {
     throw new RequestError("Expense payload is required.");
@@ -43,6 +58,7 @@ function normalizeExpenseId(expenseId) {
   return id;
 }
 
+// Validate and round amount to 2 decimal places (cents)
 function validateAmount(value) {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new RequestError("Expense amount must be a positive number.");
@@ -50,6 +66,7 @@ function validateAmount(value) {
   return Math.round(value * 100) / 100;
 }
 
+// Validate the splitBetween array: non-empty, all valid IDs, no duplicates
 function validateSplitMembers(value) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new RequestError("At least one split member is required.");
@@ -67,6 +84,9 @@ function validateSplitMembers(value) {
   return splitBetween;
 }
 
+// Fetch a group by ID, ensuring the current user is a member.
+// Returns the same error (404) for non-existent groups and non-member access
+// to avoid leaking information about groups the user doesn't belong to.
 function getVisibleGroup(db, groupId) {
   const group = db.groups.find((item) => item.id === groupId);
   if (!group) {
@@ -166,12 +186,18 @@ function normalizeUpdateExpense(body) {
   return updates;
 }
 
+// Greedy settlement algorithm: for each group member, compute net balance =
+// (total paid) - (total share). Then pair largest debtor with largest creditor
+// until all balances are settled to within 1 cent.
 function calculateBalancesForGroup(group) {
+  // Initialise every member's balance to 0
   const balanceMap = new Map(group.members.map((member) => [member.id, 0]));
 
   group.expenses.forEach((expense) => {
     const splitAmount = expense.amount / expense.splitBetween.length;
+    // The payer gets credited the full amount
     balanceMap.set(expense.paidBy, (balanceMap.get(expense.paidBy) || 0) + expense.amount);
+    // Each split member gets debited their share
     expense.splitBetween.forEach((userId) => {
       balanceMap.set(userId, (balanceMap.get(userId) || 0) - splitAmount);
     });
@@ -180,11 +206,14 @@ function calculateBalancesForGroup(group) {
   const debtors = [];
   const creditors = [];
 
+  // Separate into debtors (negative balance) and creditors (positive balance)
+  // 0.01 threshold avoids floating-point noise
   balanceMap.forEach((balance, userId) => {
     if (balance < -0.01) debtors.push({ userId, amount: -balance });
     if (balance > 0.01) creditors.push({ userId, amount: balance });
   });
 
+  // Sort descending so we settle the largest amounts first
   debtors.sort((a, b) => b.amount - a.amount);
   creditors.sort((a, b) => b.amount - a.amount);
 
@@ -192,6 +221,7 @@ function calculateBalancesForGroup(group) {
   let i = 0;
   let j = 0;
 
+  // Greedy pairing: largest debtor pays largest creditor
   while (i < debtors.length && j < creditors.length) {
     const amount = Math.min(debtors[i].amount, creditors[j].amount);
     if (amount > 0.01) {
@@ -214,7 +244,7 @@ function calculateBalancesForGroup(group) {
 async function listExpenses(groupId) {
   const db = await readDb();
   const group = getVisibleGroup(db, normalizeGroupId(groupId));
-  return group.expenses;
+  return group.expenses.filter((e) => e.category !== "settlement");
 }
 
 async function createExpense(body, options = {}) {
@@ -287,10 +317,47 @@ async function getBalances(groupId) {
   return calculateBalancesForGroup(group);
 }
 
+async function recordSettlement(body, groupId) {
+  const gid = normalizeGroupId(groupId);
+  const from = normalizeText(body?.from);
+  const to = normalizeText(body?.to);
+  const amount = validateAmount(body?.amount);
+  const date = typeof body?.date === "string" && body.date.trim() ? body.date.trim() : todayIsoDate();
+
+  if (!from || !to) throw new RequestError("Both from and to user IDs are required.");
+  if (from === to) throw new RequestError("Cannot settle with yourself.", 400);
+
+  // Store settlement as a special expense: payer (from) paid the creditor (to).
+  // This naturally balances the books — from gets +credit, to gets -debit.
+  return updateDb((db) => {
+    const group = getVisibleGroup(db, gid);
+
+    const memberIds = new Set(group.members.map((m) => m.id));
+    if (!memberIds.has(from)) throw new RequestError("Payer is not a group member.", 400);
+    if (!memberIds.has(to)) throw new RequestError("Recipient is not a group member.", 400);
+
+    const expense = {
+      id: createId("e"),
+      description: "Settlement",
+      amount,
+      paidBy: from,
+      splitBetween: [to],
+      category: "settlement",
+      date,
+      groupId: gid,
+    };
+
+    group.expenses.push(expense);
+    return { group, expense };
+  });
+}
+
 module.exports = {
+  calculateBalancesForGroup,
   createExpense,
   deleteExpense,
   getBalances,
   listExpenses,
+  recordSettlement,
   updateExpense,
 };

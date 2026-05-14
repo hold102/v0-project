@@ -1,3 +1,21 @@
+/*
+ * app_provider.dart — Central state management (ChangeNotifier)
+ *
+ * This is the "brain" of the app. It holds:
+ *   - The current user and auth state
+ *   - All groups and users
+ *   - Business logic: CRUD operations, balance calculations, totals
+ *
+ * Data loading strategy (loadData):
+ *   1. Try the backend API — if it returns data, use it and cache to SQLite
+ *   2. If API fails, try the local SQLite cache
+ *   3. If both fail, fall back to hardcoded mock data (createMockGroups)
+ *
+ * Mutations are optimistic: the UI updates immediately, then the API call
+ * fires in the background (fire-and-forget). The local SQLite cache is
+ * updated after every change.
+ */
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/user.dart';
@@ -7,6 +25,7 @@ import 'package:splitease/models/balance.dart';
 import 'package:splitease/services/api_service.dart';
 import 'package:splitease/services/local_db_service.dart';
 
+// Hardcoded fallback users — shown only when both API and local DB are unavailable
 const mockUsers = [
   User(id: 'u1', name: 'Me', avatar: '👤', email: 'me@example.com'),
   User(id: 'u2', name: 'Alex', avatar: '😎', email: 'ming@example.com'),
@@ -108,12 +127,12 @@ List<Group> createMockGroups() {
 }
 
 class AppProvider extends ChangeNotifier {
-  User? _currentUser;
-  List<User> users = List.unmodifiable(mockUsers);
-  List<Group> groups = [];
-  bool _loading = false;
-  bool _authLoading = false;
-  String? _authError;
+  User? _currentUser;                               // null = not logged in
+  List<User> users = List.unmodifiable(mockUsers);  // all known users
+  List<Group> groups = [];                           // groups visible to current user
+  bool _loading = false;                             // true while loadData is fetching
+  bool _authLoading = false;                         // true while login/register is in progress
+  String? _authError;                                // error message from last auth attempt
 
   bool get loading => _loading;
   bool get authLoading => _authLoading;
@@ -121,6 +140,7 @@ class AppProvider extends ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   User get currentUser => _currentUser ?? users.first;
 
+  // 3-tier loading: API → local cache → mock data
   Future<void> loadData() async {
     _loading = true;
     notifyListeners();
@@ -133,7 +153,7 @@ class AppProvider extends ChangeNotifier {
         groups = apiGroups;
         users = apiUsers.isNotEmpty ? apiUsers : users;
         _ensureCurrentUserInUsers();
-        // Cache to local DB
+        // Cache the fresh data for offline use
         _cacheToLocalDb(users, apiGroups);
         _loading = false;
         notifyListeners();
@@ -144,7 +164,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     try {
-      // 2. Try local SQLite cache
+      // 2. Try local SQLite cache (populated from the previous API call)
       final cachedUsers = await LocalDbService().getAllUsers();
       final cachedGroups = await LocalDbService().getAllGroups();
       if (cachedGroups.isNotEmpty) {
@@ -159,7 +179,7 @@ class AppProvider extends ChangeNotifier {
       // Local DB unavailable — fall through to mock
     }
 
-    // 3. Fallback: seed with mock data
+      // 3. Last resort: show hardcoded demo data so the app isn't blank
     groups = createMockGroups();
     _ensureCurrentUserInUsers();
     _loading = false;
@@ -216,12 +236,13 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // Post-login/register: set the current user, reload data, sync user into list
   Future<void> _completeAuth(User user) async {
     _authError = null;
     _currentUser = user;
-    users = _upsertUser(users, user);
-    await loadData();
-    users = _upsertUser(users, user);
+    users = _upsertUser(users, user);  // Ensure the user exists in the list
+    await loadData();                   // Fetch fresh data from API/cache
+    users = _upsertUser(users, user);  // Re-upsert after data reload (loadData may replace users)
     _authLoading = false;
     notifyListeners();
   }
@@ -243,6 +264,7 @@ class AppProvider extends ChangeNotifier {
     return fallback;
   }
 
+  // Replace user if same ID exists, otherwise add at the front
   List<User> _upsertUser(List<User> currentUsers, User user) {
     final updated = <User>[];
     var replaced = false;
@@ -265,6 +287,7 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // Fire-and-forget: errors are silently ignored (cache is best-effort)
   void _cacheToLocalDb(List<User> usersList, List<Group> groupsList) {
     try {
       final db = LocalDbService();
@@ -278,9 +301,10 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // Optimistic add: update UI immediately, sync to backend in background
   Group addGroup(String name, String emoji, List<User> members) {
     final newGroup = Group(
-      id: 'g${DateTime.now().millisecondsSinceEpoch}',
+      id: 'g${DateTime.now().millisecondsSinceEpoch}',  // Client-generated ID
       name: name,
       emoji: emoji,
       members: members,
@@ -290,12 +314,15 @@ class AppProvider extends ChangeNotifier {
     groups = [...groups, newGroup];
     notifyListeners();
 
-    // Sync to backend and persist locally (fire-and-forget)
+    // Sync to backend and persist locally (fire-and-forget — errors are logged so the dev console surfaces them)
     ApiService()
         .createGroup(name, emoji, members.map((m) => m.id).toList(),
             id: newGroup.id)
-        .then((_) {})
-        .catchError((_) {});
+        .catchError((Object e, StackTrace s) {
+      developer.log('createGroup failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+      return newGroup;
+    });
     _cacheToLocalDb(users, groups);
     return newGroup;
   }
@@ -326,8 +353,11 @@ class AppProvider extends ChangeNotifier {
           emoji: emoji,
           memberIds: members?.map((m) => m.id).toList(),
         )
-        .then((_) {})
-        .catchError((_) {});
+        .catchError((Object e, StackTrace s) {
+      developer.log('updateGroup failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+      throw e;
+    });
     _cacheToLocalDb(users, groups);
   }
 
@@ -335,7 +365,10 @@ class AppProvider extends ChangeNotifier {
     groups = groups.where((g) => g.id != groupId).toList();
     notifyListeners();
 
-    ApiService().deleteGroup(groupId).then((_) {}).catchError((_) {});
+    ApiService().deleteGroup(groupId).catchError((Object e, StackTrace s) {
+      developer.log('deleteGroup failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+    });
     _cacheToLocalDb(users, groups);
   }
 
@@ -355,7 +388,7 @@ class AppProvider extends ChangeNotifier {
     }).toList();
     notifyListeners();
 
-    // Sync to backend with client-generated ID (fire-and-forget)
+    // Sync to backend with client-generated ID (fire-and-forget — errors logged)
     ApiService()
         .addExpense(
           groupId: groupId,
@@ -367,8 +400,11 @@ class AppProvider extends ChangeNotifier {
           date: expense.date,
           id: expense.id,
         )
-        .then((_) {})
-        .catchError((_) {});
+        .catchError((Object e, StackTrace s) {
+      developer.log('addExpense failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+      return expense;
+    });
     _cacheToLocalDb(users, groups);
   }
 
@@ -401,8 +437,11 @@ class AppProvider extends ChangeNotifier {
           category: expense.category.name,
           date: expense.date,
         )
-        .then((_) {})
-        .catchError((_) {});
+        .catchError((Object e, StackTrace s) {
+      developer.log('updateExpense failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+      return expense;
+    });
     _cacheToLocalDb(users, groups);
   }
 
@@ -422,11 +461,13 @@ class AppProvider extends ChangeNotifier {
     }).toList();
     notifyListeners();
 
-    // Sync to backend and persist locally (fire-and-forget)
+    // Sync to backend and persist locally (fire-and-forget — errors logged)
     ApiService()
         .deleteExpense(groupId, expenseId)
-        .then((_) {})
-        .catchError((_) {});
+        .catchError((Object e, StackTrace s) {
+      developer.log('deleteExpense failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+    });
     _cacheToLocalDb(users, groups);
   }
 
@@ -446,18 +487,21 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // Same greedy settlement algorithm as the backend's expenseService
   List<Balance> calculateBalances(Group group) {
+    // Step 1: Initialise all member balances to 0
     final balanceMap = <String, double>{};
     for (final m in group.members) {
       balanceMap[m.id] = 0;
     }
 
+    // Step 2: For each expense, credit the payer and debit the splitters
     for (final expense in group.expenses) {
       final splitAmount = expense.amount / expense.splitBetween.length;
       balanceMap[expense.paidBy] =
-          (balanceMap[expense.paidBy] ?? 0) + expense.amount;
+          (balanceMap[expense.paidBy] ?? 0) + expense.amount;  // Full amount back to payer
       for (final userId in expense.splitBetween) {
-        balanceMap[userId] = (balanceMap[userId] ?? 0) - splitAmount;
+        balanceMap[userId] = (balanceMap[userId] ?? 0) - splitAmount;  // Deduct share
       }
     }
 
@@ -498,6 +542,47 @@ class AppProvider extends ChangeNotifier {
     return settlements;
   }
 
+  void recordSettlement(String groupId, String from, String to, double amount) {
+    final now = DateTime.now().toIso8601String().split('T')[0];
+    final settlementExpense = Expense(
+      id: 'e${DateTime.now().millisecondsSinceEpoch}',
+      description: 'Settlement',
+      amount: amount,
+      paidBy: from,
+      splitBetween: [to],
+      category: ExpenseCategory.settlement,
+      date: now,
+      groupId: groupId,
+    );
+
+    groups = groups.map((g) {
+      if (g.id != groupId) return g;
+      return Group(
+        id: g.id,
+        name: g.name,
+        emoji: g.emoji,
+        members: g.members,
+        expenses: [...g.expenses, settlementExpense],
+        createdAt: g.createdAt,
+      );
+    }).toList();
+    notifyListeners();
+
+    ApiService()
+        .recordSettlement(
+          groupId: groupId,
+          from: from,
+          to: to,
+          amount: amount,
+        )
+        .catchError((Object e, StackTrace s) {
+      developer.log('recordSettlement failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+      return <String, dynamic>{};
+    });
+    _cacheToLocalDb(users, groups);
+  }
+
   double getTotalOwed() {
     double total = 0;
     for (final group in groups) {
@@ -523,7 +608,7 @@ class AppProvider extends ChangeNotifier {
   List<Map<String, dynamic>> getRecentActivity() {
     final all = <Map<String, dynamic>>[];
     for (final g in groups) {
-      for (final e in g.expenses) {
+      for (final e in g.expenses.where((e) => e.category != ExpenseCategory.settlement)) {
         all.add({
           'expense': e,
           'groupName': g.name,
@@ -541,8 +626,9 @@ class AppProvider extends ChangeNotifier {
   }
 }
 
+// Mutable helper class used inside calculateBalances (private to this file)
 class _BalanceEntry {
   final String id;
-  double amount;
+  double amount;  // Mutable — gets decremented as settlements are paired
   _BalanceEntry(this.id, this.amount);
 }
