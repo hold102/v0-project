@@ -156,7 +156,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 20, 0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
               child: Column(
                 children: [
                   Row(
@@ -206,14 +206,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   // Progress bar
                   Row(
                     children: [
                       _ProgressSegment(filled: true),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       _ProgressSegment(filled: _step >= 1),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       _ProgressSegment(filled: _step >= 2),
                     ],
                   ),
@@ -240,7 +240,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final app = context.watch<AppProvider>();
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         Text('Select a group to add an expense',
             style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
@@ -350,7 +350,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final app = context.read<AppProvider>();
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         // Emoji picker
         Text('Choose Icon',
@@ -513,7 +513,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         amount != null && amount > 0 && _description.trim().isNotEmpty;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         // Selected group info
         if (group != null)
@@ -705,7 +705,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         _splitBetween.isNotEmpty ? amount / _splitBetween.length : 0;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
         // Summary
         Container(
@@ -908,12 +908,12 @@ class _ProgressSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        height: 3,
+        height: 4,
         decoration: BoxDecoration(
           color: filled
               ? Theme.of(context).colorScheme.primary
               : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(4),
         ),
       ),
     );

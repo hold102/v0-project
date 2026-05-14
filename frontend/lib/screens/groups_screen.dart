@@ -18,9 +18,9 @@ class GroupsScreen extends StatelessWidget {
       builder: (context, app, _) {
         return Column(
           children: [
-            const SizedBox(height: 60),
+            const SizedBox(height: 56),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -33,24 +33,39 @@ class GroupsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Expanded(
               child: app.groups.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.group_rounded,
-                              size: 64, color: Colors.grey.shade300),
-                          const SizedBox(height: 12),
-                          const Text('No groups yet',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(Icons.group_rounded,
+                                  size: 40, color: Colors.grey.shade400),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text('No groups yet',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tap the + button below to create your first group',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text('Tap the + button below to create a group',
-                              style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 13)),
-                        ],
+                                  color: Colors.grey.shade500, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -100,7 +115,7 @@ class _GroupListTile extends StatelessWidget {
             : 'Settled';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Card(
         child: InkWell(
           onTap: onTap,
@@ -136,12 +151,12 @@ class _GroupListTile extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text('${group.members.length} members',
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 13)),
+                                  color: Colors.grey.shade500, fontSize: 12)),
                           Text(' · ',
                               style: TextStyle(color: Colors.grey.shade400)),
                           Text('${group.expenses.length} expenses',
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 13)),
+                                  color: Colors.grey.shade500, fontSize: 12)),
                         ],
                       ),
                     ],

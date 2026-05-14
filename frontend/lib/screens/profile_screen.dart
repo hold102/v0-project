@@ -37,10 +37,10 @@ class ProfileScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            const SizedBox(height: 60),
+            const SizedBox(height: 56),
             // Profile header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
                   Container(
@@ -84,10 +84,10 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             // Stats grid
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -119,20 +119,21 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
             // Menu items
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text('Settings',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey)),
+                      color: Colors.grey.shade500,
+                      letterSpacing: 0.5)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             ...menuItems.map((item) => Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 3),
                   child: Card(
                     child: ListTile(
                       leading: Container(
@@ -160,24 +161,24 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 )),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             // Logout
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Card(
                 child: ListTile(
                   leading: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Color(0xFFE11D48),
+                      color: const Color(0xFFE11D48).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(Icons.logout_rounded,
+                    child: const Icon(Icons.logout_rounded,
                         color: Color(0xFFE11D48), size: 22),
                   ),
-                  title: Text('Log out',
+                  title: const Text('Log out',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: Color(0xFFE11D48),
@@ -190,7 +191,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             // App footer
             Center(
               child: Column(

@@ -56,7 +56,7 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 20, 0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
               child: Row(
                 children: [
                   GestureDetector(
@@ -84,7 +84,7 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
             // Content
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 children: [
                   // Emoji picker
                   Text('Choose Icon',

@@ -130,10 +130,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               children: [
                 // Summary card
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
                       gradient: LinearGradient(
                         colors: [
                           Theme.of(context).cardColor,
@@ -142,6 +143,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                       ),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Column(
                       children: [
@@ -243,10 +251,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 // Tab bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
@@ -332,25 +340,42 @@ class _ExpensesTab extends StatelessWidget {
 
     if (visible.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Container(
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             children: [
-              Icon(Icons.receipt_long_rounded,
-                  size: 56, color: Colors.grey.shade300),
-              const SizedBox(height: 12),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.receipt_long_rounded,
+                    size: 36, color: Colors.grey.shade400),
+              ),
+              const SizedBox(height: 16),
               const Text('No expenses yet',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               Text('Tap Add to record the first expense',
+                  textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -376,7 +401,7 @@ class _ExpensesTab extends StatelessWidget {
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: sorted.map((expense) {
           return _ExpenseCard(
@@ -424,6 +449,13 @@ class _ExpenseCard extends StatelessWidget {
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -510,31 +542,40 @@ class _BalancesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (balances.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Container(
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
-                  color: Color(0xFF059669),
-                  borderRadius: BorderRadius.circular(16),
+                  color: const Color(0xFF059669).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 alignment: Alignment.center,
-                child: const Text('✓', style: TextStyle(fontSize: 28)),
+                child: const Icon(Icons.check_circle_outline_rounded,
+                    size: 36, color: Color(0xFF059669)),
               ),
-              const SizedBox(height: 12),
-              const Text('All settled',
+              const SizedBox(height: 16),
+              const Text('All settled up!',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text('This group has no outstanding expenses',
+              const SizedBox(height: 8),
+              Text('This group has no outstanding balances',
+                  textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
             ],
           ),
@@ -544,7 +585,7 @@ class _BalancesTab extends StatelessWidget {
 
     final app = context.read<AppProvider>();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

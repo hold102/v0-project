@@ -47,9 +47,9 @@ class ActivityScreen extends StatelessWidget {
 
         return Column(
           children: [
-            const SizedBox(height: 60),
+            const SizedBox(height: 56),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -62,10 +62,10 @@ class ActivityScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             // Stats
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
                   Expanded(
@@ -75,17 +75,37 @@ class ActivityScreen extends StatelessWidget {
                         color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.grey.shade200),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.schedule_rounded,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(height: 10),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(Icons.schedule_rounded,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary),
+                          ),
+                          const SizedBox(height: 12),
                           Text('${all.length}',
                               style: const TextStyle(
                                   fontSize: 24, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
                           Text('Total records',
                               style: TextStyle(
                                   color: Colors.grey.shade500, fontSize: 12)),
@@ -101,18 +121,38 @@ class ActivityScreen extends StatelessWidget {
                         color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.grey.shade200),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.trending_up_rounded,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(height: 10),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(Icons.trending_up_rounded,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary),
+                          ),
+                          const SizedBox(height: 12),
                           Text('RM ${totalAmount.toStringAsFixed(0)}',
                               style: const TextStyle(
                                   fontSize: 24, fontWeight: FontWeight.bold)),
-                          Text('Total Amount',
+                          const SizedBox(height: 2),
+                          Text('Total amount',
                               style: TextStyle(
                                   color: Colors.grey.shade500, fontSize: 12)),
                         ],
@@ -126,19 +166,35 @@ class ActivityScreen extends StatelessWidget {
             Expanded(
               child: all.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('📝', style: TextStyle(fontSize: 48)),
-                          const SizedBox(height: 12),
-                          const Text('No expense records yet',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(Icons.article_outlined,
+                                  size: 40, color: Colors.grey.shade400),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text('No expense records yet',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 16)),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Start adding expenses to track splits',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text('Start adding expenses to track splits',
-                              style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 13)),
-                        ],
+                                  color: Colors.grey.shade500, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView(
@@ -149,7 +205,7 @@ class ActivityScreen extends StatelessWidget {
                           children: [
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 8),
+                                  horizontal: 24, vertical: 8),
                               child: Text(_formatDateHeader(entry.key),
                                   style: TextStyle(
                                       color: Colors.grey.shade500,
@@ -167,7 +223,7 @@ class ActivityScreen extends StatelessWidget {
 
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 3),
+                                    horizontal: 24, vertical: 4),
                                 child: Card(
                                   child: InkWell(
                                     onTap: () => onGroupSelect(groupId),

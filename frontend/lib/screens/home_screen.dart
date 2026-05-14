@@ -32,10 +32,10 @@ class HomeScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  const SizedBox(height: 60),
+                  const SizedBox(height: 56),
                   // Header
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -86,7 +86,7 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   // Balance Card
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -152,7 +152,7 @@ class HomeScreen extends StatelessWidget {
                                               style: TextStyle(
                                                   color: Colors.white
                                                       .withValues(alpha: 0.8),
-                                                  fontSize: 11)),
+                                                  fontSize: 12)),
                                           Text(
                                               'RM ${totalOwed.toStringAsFixed(2)}',
                                               style: const TextStyle(
@@ -186,7 +186,7 @@ class HomeScreen extends StatelessWidget {
                                               style: TextStyle(
                                                   color: Colors.white
                                                       .withValues(alpha: 0.8),
-                                                  fontSize: 11)),
+                                                  fontSize: 12)),
                                           Text(
                                               'RM ${totalOwing.toStringAsFixed(2)}',
                                               style: const TextStyle(
@@ -205,10 +205,10 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
                   // Groups section
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -226,7 +226,7 @@ class HomeScreen extends StatelessWidget {
                     height: 166,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       itemCount: app.groups.length,
                       itemBuilder: (context, index) {
                         final group = app.groups[index];
@@ -240,10 +240,10 @@ class HomeScreen extends StatelessWidget {
                       },
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
                   // Recent activity
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    padding: EdgeInsets.symmetric(horizontal: 24),
                     child: Text('Recent Activity',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w600)),
@@ -251,15 +251,28 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   if (recent.isEmpty)
                     Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      padding: const EdgeInsets.all(32),
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 40),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.grey.shade100),
                       ),
-                      child: const Center(
-                          child: Text('No activity yet',
-                              style: TextStyle(color: Colors.grey))),
+                      child: Column(
+                        children: [
+                          Icon(Icons.receipt_long_outlined,
+                              size: 48, color: Colors.grey.shade300),
+                          const SizedBox(height: 12),
+                          const Text('No activity yet',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text('Add an expense to get started',
+                              style: TextStyle(
+                                  color: Colors.grey.shade500, fontSize: 13)),
+                        ],
+                      ),
                     ),
                   for (final item in recent)
                     _RecentExpenseTile(
@@ -297,13 +310,13 @@ class _RecentExpenseTile extends StatelessWidget {
     final payer = app.getUserById(expense.paidBy);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Card(
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Container(

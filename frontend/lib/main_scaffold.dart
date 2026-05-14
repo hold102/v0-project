@@ -65,11 +65,18 @@ class _MainScaffoldState extends State<MainScaffold> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+          color: Theme.of(context).scaffoldBackgroundColor,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -89,7 +96,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                 GestureDetector(
                   onTap: () => _onTabChange(2),
                   child: Transform.translate(
-                    offset: const Offset(0, -12),
+                    offset: const Offset(0, -8),
                     child: Container(
                       width: 56,
                       height: 56,
@@ -98,8 +105,8 @@ class _MainScaffoldState extends State<MainScaffold> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 12,
+                            color: colorScheme.primary.withValues(alpha: 0.35),
+                            blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
                         ],
@@ -146,7 +153,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final color = isActive ? colorScheme.primary : Colors.grey;
+    final color = isActive ? colorScheme.primary : Colors.grey.shade500;
 
     return GestureDetector(
       onTap: onTap,
@@ -156,12 +163,22 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: isActive ? 26 : 24),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? colorScheme.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: color,
               ),
