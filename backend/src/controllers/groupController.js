@@ -1,3 +1,8 @@
+/*
+ * groupController.js — Group CRUD handlers
+ * Thin request handlers. They pull data from req.params / req.body and
+ * delegate to groupService for all business logic and validation.
+ */
 const {
   createGroup: createGroupService,
   deleteGroup: deleteGroupService,

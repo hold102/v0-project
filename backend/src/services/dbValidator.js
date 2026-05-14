@@ -1,11 +1,11 @@
-const fs = require("fs/promises");
-const path = require("path");
-const { dataFile } = require("../config/env");
+/*
+ * dbValidator.js — Data integrity validators shared by dbService and supabaseService.
+ * These run on every database read and write to guarantee structural correctness.
+ */
+
 const { isExpenseCategory } = require("../models/categoryModel");
-const { createInitialDb } = require("../models/seedData");
 
-let updateQueue = Promise.resolve();
-
+// Deep-clone via JSON round-trip (fast enough for our data sizes)
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -14,11 +14,14 @@ function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// Throws if value is not a non-empty string
 function assertString(value, message) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(message);
   }
 }
+
+// --- Data validators (run on every read/write) ---
 
 function validateUser(user) {
   if (!isObject(user)) throw new Error("Invalid user.");
@@ -61,6 +64,17 @@ function validateExpense(expense) {
   assertString(expense.groupId, "Expense group id is required.");
 }
 
+function validateSettlement(settlement) {
+  if (!isObject(settlement)) throw new Error("Invalid settlement.");
+  assertString(settlement.id, "Settlement id is required.");
+  assertString(settlement.from, "Settlement from is required.");
+  assertString(settlement.to, "Settlement to is required.");
+  if (typeof settlement.amount !== "number" || !Number.isFinite(settlement.amount) || settlement.amount <= 0) {
+    throw new Error("Settlement amount must be positive.");
+  }
+  assertString(settlement.date, "Settlement date is required.");
+}
+
 function validateGroup(group) {
   if (!isObject(group)) throw new Error("Invalid group.");
   assertString(group.id, "Group id is required.");
@@ -72,11 +86,23 @@ function validateGroup(group) {
   if (!Array.isArray(group.expenses)) {
     throw new Error("Group expenses must be a list.");
   }
+  if (!Array.isArray(group.settlements)) {
+    throw new Error("Group settlements must be a list.");
+  }
   assertString(group.createdAt, "Group created date is required.");
+  // Cascade: validate every member, expense, and settlement inside the group
   group.members.forEach(validateUser);
   group.expenses.forEach(validateExpense);
+  group.settlements.forEach(validateSettlement);
+  // Cross-check: settlement participants must be group members
+  const memberIds = new Set(group.members.map((m) => m.id));
+  group.settlements.forEach((s) => {
+    if (!memberIds.has(s.from)) throw new Error("Settlement from is not a group member.");
+    if (!memberIds.has(s.to)) throw new Error("Settlement to is not a group member.");
+  });
 }
 
+// Top-level DB integrity check — runs on every readDb() and writeDb()
 function validateDb(db) {
   if (!isObject(db)) throw new Error("Invalid database.");
   assertString(db.currentUserId, "Current user id is required.");
@@ -102,6 +128,8 @@ function validateDb(db) {
     db.accounts.forEach((account) => validateAccount(account, userIds));
   }
 
+  // Cross-reference checks: every group member must be a real user,
+  // every expense's payer/split members must belong to the group
   db.groups.forEach((group) => {
     const memberIds = new Set(group.members.map((member) => member.id));
     group.members.forEach((member) => {
@@ -128,56 +156,14 @@ function validateDb(db) {
   return db;
 }
 
-async function fileExists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readJson(filePath) {
-  const file = await fs.readFile(filePath, "utf8");
-  return JSON.parse(file);
-}
-
-async function readDb() {
-  if (await fileExists(dataFile)) {
-    return validateDb(await readJson(dataFile));
-  }
-
-  const db = createInitialDb();
-  await writeDb(db);
-  return clone(db);
-}
-
-async function writeDb(db) {
-  validateDb(db);
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  const tempPath = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await fs.writeFile(tempPath, `${JSON.stringify(db, null, 2)}\n`, "utf8");
-  await fs.rename(tempPath, dataFile);
-}
-
-async function updateDb(mutator) {
-  const run = async () => {
-    const db = await readDb();
-    const result = await mutator(db);
-    await writeDb(db);
-    return clone(result);
-  };
-
-  const nextUpdate = updateQueue.then(run, run);
-  updateQueue = nextUpdate.then(
-    () => undefined,
-    () => undefined
-  );
-  return nextUpdate;
-}
-
 module.exports = {
-  readDb,
-  writeDb,
-  updateDb,
+  clone,
+  isObject,
+  assertString,
+  validateUser,
+  validateAccount,
+  validateExpense,
+  validateSettlement,
+  validateGroup,
+  validateDb,
 };

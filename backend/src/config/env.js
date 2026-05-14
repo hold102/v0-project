@@ -1,12 +1,21 @@
-const path = require("path");
+/*
+ * env.js — Environment configuration
+ * Reads the server port and JSON database file path from environment variables,
+ * falling back to sensible defaults when they are not set.
+ *
+ * PORT       — the TCP port the server listens on (default: 3000)
 
-const port = Number.parseInt(process.env.PORT || "3000", 10);
-const configuredDataFile = process.env.DATA_FILE || process.env.APP_DB_PATH;
-const dataFile = configuredDataFile
-  ? path.resolve(configuredDataFile)
-  : path.join(__dirname, "..", "..", "data", "app-db.json");
+ */
+require("dotenv").config();
+
+// Parse the PORT env variable as an integer, default to 5001
+const port = Number.parseInt(process.env.PORT || "5001", 10);
 
 module.exports = {
-  port: Number.isFinite(port) ? port : 3000,
-  dataFile,
+  // Guard against NaN (e.g. PORT="abc")
+  port: Number.isFinite(port) ? port : 5001,
+
+  //Supabase config
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
 };

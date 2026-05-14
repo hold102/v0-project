@@ -1,3 +1,8 @@
+/*
+ * auth_screen.dart — Login / Register screen
+ * A single form that toggles between sign-in and sign-up mode.
+ * Uses Consumer to react to auth errors from AppProvider.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';

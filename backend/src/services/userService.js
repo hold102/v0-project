@@ -1,5 +1,14 @@
+/*
+ * userService.js — User management logic
+ *
+ * "createOrReuseUser" is designed for adding members to groups: if a user
+ * with the same name or email already exists, it returns the existing record
+ * instead of creating a duplicate. This prevents proliferation of near-duplicate
+ * users in the member list.
+ */
+
 const { createId } = require("./idService");
-const { readDb, updateDb } = require("./dbService");
+const { readDb, updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
 
 function normalizeText(value) {
@@ -24,6 +33,7 @@ async function createOrReuseUser(body) {
   const avatar = normalizeText(body.avatar) || "👤";
 
   return updateDb((db) => {
+    // Case-insensitive match on name or email to detect duplicates
     const duplicate = db.users.find((user) => {
       const sameName = user.name.toLocaleLowerCase() === name.toLocaleLowerCase();
       const sameEmail = email && user.email && user.email.toLocaleLowerCase() === email.toLocaleLowerCase();
@@ -31,7 +41,7 @@ async function createOrReuseUser(body) {
     });
 
     if (duplicate) {
-      return duplicate;
+      return duplicate;  // Reuse existing user
     }
 
     const user = {

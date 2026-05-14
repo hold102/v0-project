@@ -1,9 +1,17 @@
+/*
+ * group_detail_screen.dart — Single group view with Expenses & Balances tabs
+ * Shows a summary card (total spent, your balance, member avatars),
+ * then a tab bar to switch between the expense list and the settlement plan.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/expense.dart';
+import 'package:splitease/models/group.dart';
+import 'package:splitease/models/balance.dart';
 import 'package:splitease/screens/add_expense_screen.dart';
+import 'package:splitease/screens/edit_group_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -73,6 +81,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.bold)),
                 actions: [
+                  IconButton(
+                    onPressed: () async {
+                      final result = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => EditGroupScreen(groupId: group.id),
+                        ),
+                      );
+                      if (result == true) setState(() {});
+                    },
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: const Icon(Icons.edit_rounded, size: 18),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.only(right: 12),
                     child: FilledButton.icon(
@@ -298,7 +326,11 @@ class _ExpensesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (expenses.isEmpty) {
+    final visible = expenses
+        .where((e) => e.category != ExpenseCategory.settlement)
+        .toList();
+
+    if (visible.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
@@ -340,7 +372,7 @@ class _ExpensesTab extends StatelessWidget {
       );
     }
 
-    final sorted = List<Expense>.from(expenses)
+    final sorted = List<Expense>.from(visible)
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return Padding(
@@ -352,6 +384,16 @@ class _ExpensesTab extends StatelessWidget {
             onDelete: () {
               context.read<AppProvider>().deleteExpense(groupId, expense.id);
             },
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AddExpenseScreen(
+                    groupId: groupId,
+                    expense: expense,
+                  ),
+                ),
+              );
+            },
           );
         }).toList(),
       ),
@@ -362,8 +404,9 @@ class _ExpensesTab extends StatelessWidget {
 class _ExpenseCard extends StatelessWidget {
   final Expense expense;
   final VoidCallback onDelete;
+  final VoidCallback? onTap;
 
-  const _ExpenseCard({required this.expense, required this.onDelete});
+  const _ExpenseCard({required this.expense, required this.onDelete, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +416,9 @@ class _ExpenseCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
@@ -445,6 +490,7 @@ class _ExpenseCard extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -456,8 +502,8 @@ class _ExpenseCard extends StatelessWidget {
 }
 
 class _BalancesTab extends StatelessWidget {
-  final dynamic group;
-  final List<dynamic> balances;
+  final Group group;
+  final List<Balance> balances;
   const _BalancesTab({required this.group, required this.balances});
 
   @override
@@ -583,6 +629,26 @@ class _BalancesTab extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: accent,
                         )),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        context.read<AppProvider>().recordSettlement(
+                              group.id,
+                              b.from,
+                              b.to,
+                              b.amount,
+                            );
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.check_rounded, size: 20, color: accent),
+                      ),
+                    ),
                   ],
                 ),
               ),

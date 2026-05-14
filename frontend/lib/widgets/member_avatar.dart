@@ -1,3 +1,7 @@
+/*
+ * member_avatar.dart — A simple circular-ish container displaying an emoji avatar
+ * Size, background color, and border are configurable.
+ */
 import 'package:flutter/material.dart';
 
 class MemberAvatar extends StatelessWidget {

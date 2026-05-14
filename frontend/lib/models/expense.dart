@@ -1,3 +1,8 @@
+/*
+ * expense.dart — An expense record within a group
+ * Stores what was spent, who paid, who it's split between, and a category.
+ * The `perPerson` getter computes how much each split member owes.
+ */
 import 'package:splitease/models/expense_category.dart';
 
 class Expense {
@@ -26,13 +31,13 @@ class Expense {
       id: json['id'] as String,
       description: json['description'] as String,
       amount: (json['amount'] as num).toDouble(),
-      paidBy: json['paidBy'] as String? ?? json['paid_by'] as String,
+      paidBy: json['paidBy'] as String? ?? json['paid_by'] as String,  // Supports both camelCase and snake_case
       splitBetween: (json['splitBetween'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
       category:
-          CategoryConfig.fromString(json['category'] as String? ?? 'other'),
+          CategoryConfig.fromString(json['category'] as String? ?? 'other'),  // Default to "other" if missing
       date: json['date'] as String,
       groupId: json['groupId'] as String? ?? json['group_id'] as String,
     );
@@ -49,6 +54,7 @@ class Expense {
         'groupId': groupId,
       };
 
+  // How much each person pays for this expense (total / number of splitters)
   double get perPerson =>
       splitBetween.isNotEmpty ? amount / splitBetween.length : amount;
 }

@@ -1,3 +1,9 @@
+/*
+ * categoryModel.js — Expense category definitions
+ * Maps each category key (e.g. "food") to a human-readable label and emoji
+ * for display in the UI. Also exports a validation helper.
+ */
+
 const expenseCategories = [
   "food",
   "transport",
@@ -6,8 +12,10 @@ const expenseCategories = [
   "accommodation",
   "utilities",
   "other",
+  "settlement",
 ];
 
+// Each category's display-friendly metadata
 const categoryConfig = {
   food: { label: "Food", emoji: "🍜" },
   transport: { label: "Transport", emoji: "🚗" },
@@ -16,6 +24,7 @@ const categoryConfig = {
   accommodation: { label: "Accommodation", emoji: "🏨" },
   utilities: { label: "Utilities", emoji: "💡" },
   other: { label: "Other", emoji: "📦" },
+  settlement: { label: "Settlement", emoji: "💰" },
 };
 
 function isExpenseCategory(value) {

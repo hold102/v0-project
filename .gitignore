@@ -9,6 +9,8 @@ backend/node_modules/
 backend/data/app-db.json
 backend/data/*.tmp
 npm-debug.log*
+backend/.env
+
 
 # Flutter frontend
 frontend/.dart_tool/
@@ -20,3 +22,5 @@ frontend/.packages
 # IDE/editor
 .idea/
 .vscode/
+
+

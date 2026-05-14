@@ -1,3 +1,9 @@
+/*
+ * expense_category.dart — Expense category definitions
+ * Each category has a key (enum), a display label, an emoji, and a color.
+ * CategoryConfig.configs maps every enum value to its metadata.
+ * fromString() converts a backend category string back to the enum.
+ */
 import 'package:flutter/material.dart';
 
 enum ExpenseCategory {
@@ -8,6 +14,7 @@ enum ExpenseCategory {
   accommodation,
   utilities,
   other,
+  settlement,
 }
 
 class CategoryConfig {
@@ -66,10 +73,18 @@ class CategoryConfig {
       emoji: '📦',
       color: Color(0xFFF1F5F9),
     ),
+    ExpenseCategory.settlement: CategoryConfig(
+      category: ExpenseCategory.settlement,
+      label: 'Settlement',
+      emoji: '💰',
+      color: Color(0xFFD1FAE5),
+    ),
   };
 
+  // Look up config by enum value
   static CategoryConfig fromCategory(ExpenseCategory cat) => configs[cat]!;
 
+  // Convert a backend string (e.g., "food") to the enum, defaulting to "other"
   static ExpenseCategory fromString(String value) {
     return ExpenseCategory.values.firstWhere(
       (e) => e.name == value,

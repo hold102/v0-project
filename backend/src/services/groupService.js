@@ -1,5 +1,13 @@
+/*
+ * groupService.js — Group business logic
+ *
+ * Handles CRUD for groups, member validation, and access control.
+ * Key rule: only group members can see or modify a group.
+ * Another rule: you can't remove a member who has expenses (to keep balances consistent).
+ */
+
 const { createId, todayIsoDate } = require("./idService");
-const { readDb, updateDb } = require("./dbService");
+const { readDb, updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
 
 function normalizeText(value) {
@@ -15,6 +23,7 @@ function normalizeOptionalId(value, label) {
   return id;
 }
 
+// Groups need at least 2 unique members
 function validateMemberIds(memberIds) {
   if (!Array.isArray(memberIds) || memberIds.length < 2) {
     throw new RequestError("At least two members are required.");
@@ -34,6 +43,7 @@ function validateMemberIds(memberIds) {
   return normalized;
 }
 
+// Resolve member IDs to actual user objects from the database
 function resolveMembers(db, memberIds) {
   const memberIdSet = new Set(memberIds);
   const members = db.users.filter((user) => memberIdSet.has(user.id));
@@ -42,6 +52,7 @@ function resolveMembers(db, memberIds) {
     throw new RequestError("One or more selected members do not exist.");
   }
 
+  // Creator must include themselves in the group
   if (!memberIdSet.has(db.currentUserId)) {
     throw new RequestError("Selected members must include the current user.");
   }
@@ -49,6 +60,7 @@ function resolveMembers(db, memberIds) {
   return members;
 }
 
+// Access control: same pattern as expenseService — hide non-visible groups behind 404
 function assertGroupIsVisible(db, group) {
   const isMember = group.members.some((member) => member.id === db.currentUserId);
   if (!isMember) {
@@ -93,6 +105,7 @@ async function createGroup(body) {
   }
 
   return updateDb((db) => {
+    // Prevent duplicate IDs when caller specifies one
     if (id && db.groups.some((group) => group.id === id)) {
       throw new RequestError("Group id already exists.", 409);
     }
@@ -106,6 +119,7 @@ async function createGroup(body) {
       members,
       createdAt: todayIsoDate(),
       expenses: [],
+      settlements: [],
     };
 
     db.groups.push(group);
@@ -143,12 +157,14 @@ async function updateGroup(id, body) {
 
     if (memberIds !== undefined) {
       const memberIdSet = new Set(memberIds);
+      // Collect every user who is referenced by an expense (payer or split member)
       const referencedUserIds = new Set();
       group.expenses.forEach((expense) => {
         referencedUserIds.add(expense.paidBy);
         expense.splitBetween.forEach((userId) => referencedUserIds.add(userId));
       });
 
+      // Prevent removing members who still appear in expenses (would break balance calculations)
       const removesReferencedUser = [...referencedUserIds].some((userId) => !memberIdSet.has(userId));
       if (removesReferencedUser) {
         throw new RequestError("Members with existing expenses cannot be removed.", 409);

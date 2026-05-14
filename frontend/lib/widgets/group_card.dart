@@ -1,3 +1,7 @@
+/*
+ * group_card.dart — A compact horizontal card for the home screen carousel
+ * Shows emoji, name, member count, and the current user's balance status.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';

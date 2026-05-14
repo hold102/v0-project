@@ -1,5 +1,11 @@
+/*
+ * group.dart — A group of users splitting expenses together
+ * Each group has members, a list of expenses, and a creation date.
+ * totalExpenses sums all expense amounts.
+ */
 import 'package:splitease/models/user.dart';
 import 'package:splitease/models/expense.dart';
+import 'package:splitease/models/expense_category.dart';
 
 class Group {
   final String id;
@@ -32,7 +38,7 @@ class Group {
               .toList() ??
           [],
       createdAt:
-          json['createdAt'] as String? ?? json['created_at'] as String? ?? '',
+          json['createdAt'] as String? ?? json['created_at'] as String? ?? '',  // camelCase with snake_case fallback
     );
   }
 
@@ -45,7 +51,11 @@ class Group {
         'createdAt': createdAt,
       };
 
-  double get totalExpenses => expenses.fold(0, (sum, e) => sum + e.amount);
+  // Sum of all non-settlement expenses in this group
+  double get totalExpenses => expenses
+      .where((e) => e.category != ExpenseCategory.settlement)
+      .fold(0, (sum, e) => sum + e.amount);
 
+  // Parse the ISO date string, falling back to now if parsing fails
   DateTime get createdDate => DateTime.tryParse(createdAt) ?? DateTime.now();
 }

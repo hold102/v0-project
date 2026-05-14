@@ -1,3 +1,8 @@
+/*
+ * home_screen.dart — Main dashboard
+ * Shows a net balance card (with gradient), a horizontal group carousel,
+ * and a recent-activity list (last 5 expenses).
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';

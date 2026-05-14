@@ -1,3 +1,9 @@
+/*
+ * userController.js — User CRUD handlers
+ * Delegates to userService. "createOrReuseUser" means creating a user who
+ * already exists (same name/email) will return the existing record instead
+ * of creating a duplicate.
+ */
 const {
   createOrReuseUser,
   getUserById: getUserByIdService,

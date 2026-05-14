@@ -1,3 +1,11 @@
+/*
+ * local_db_service.dart — SQLite offline cache
+ *
+ * When the API is reachable, fetched data is cached here so the app still
+ * shows the last known state on the next launch even without network.
+ * Uses the sqflite package. Tables mirror the API's data model:
+ * users, groups_table, group_members, expenses, expense_splits.
+ */
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:splitease/models/user.dart';
@@ -12,17 +20,19 @@ class LocalDbService {
 
   Database? _db;
 
+  // Lazy-init: the database is opened once on first access, then reused
   Future<Database> get database async {
     if (_db != null) return _db!;
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       join(dbPath, 'splitease.db'),
       version: 1,
-      onCreate: _onCreate,
+      onCreate: _onCreate,  // Only runs when the DB file is created for the first time
     );
     return _db!;
   }
 
+  // Create all tables on first run
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE users (
@@ -77,9 +87,10 @@ class LocalDbService {
     return rows.map((r) => User.fromJson(r)).toList();
   }
 
+  // Insert a group with all related data (members, expenses, splits) in a single transaction
   Future<void> insertGroup(Group group) async {
     final db = await database;
-    await db.transaction((txn) async {
+    await db.transaction((txn) async {  // All-or-nothing: if any insert fails, everything rolls back
       await txn.insert(
         'groups_table',
         {
@@ -165,8 +176,10 @@ class LocalDbService {
     return result;
   }
 
+  // Wipe all cached data before re-caching fresh data from the API
   Future<void> clearAll() async {
     final db = await database;
+    // Delete child tables first to avoid foreign-key issues (if FK enforcement is enabled)
     await db.delete('expense_splits');
     await db.delete('expenses');
     await db.delete('group_members');

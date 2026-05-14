@@ -1,3 +1,8 @@
+/*
+ * widget_test.dart — Basic integration/smoke tests
+ * Verifies that the app launches, key screens render, and navigation works.
+ * Uses mock data created by AppProvider.createMockGroups().
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +14,7 @@ import 'package:splitease/models/group.dart';
 import 'package:splitease/providers/app_provider.dart';
 
 void main() {
+  // Smoke test: does the app render the auth screen when not authenticated?
   testWidgets('App launches smoke test', (WidgetTester tester) async {
     final provider = AppProvider();
 

@@ -1,3 +1,7 @@
+/*
+ * balance_card.dart — A settlement card showing "A owes B $X"
+ * Uses red accent if the current user is the debtor (isMe=true), green otherwise.
+ */
 import 'package:flutter/material.dart';
 import 'package:splitease/models/balance.dart';
 import 'package:splitease/providers/app_provider.dart';

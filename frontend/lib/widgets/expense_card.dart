@@ -1,3 +1,8 @@
+/*
+ * expense_card.dart — A tappable expense summary card
+ * Shows the category emoji/color, description, payer, amount, and per-person split.
+ * Optionally shows a delete button.
+ */
 import 'package:flutter/material.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/expense_category.dart';

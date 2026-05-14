@@ -1,3 +1,10 @@
+/*
+ * add_expense_screen.dart — Multi-step "add expense" wizard
+ * Step 0: Select an existing group (or create a new one)
+ * Step 1: Enter amount, description, category, and payer
+ * Step 2: Choose which members to split between
+ * Progress is shown as a 3-segment bar at the top.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
@@ -6,7 +13,8 @@ import 'package:splitease/models/expense.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String? groupId;
-  const AddExpenseScreen({super.key, this.groupId});
+  final Expense? expense;
+  const AddExpenseScreen({super.key, this.groupId, this.expense});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -45,10 +53,20 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.groupId != null) {
+    final app = context.read<AppProvider>();
+    if (widget.expense != null) {
+      final e = widget.expense!;
+      _selectedGroupId = e.groupId;
+      _description = e.description;
+      _amount = e.amount.toString();
+      _category = e.category;
+      _paidBy = e.paidBy;
+      _splitBetween = List<String>.from(e.splitBetween);
+      _step = 1;
+      _selectedMembers = [app.currentUser.id];
+    } else if (widget.groupId != null) {
       _selectedGroupId = widget.groupId!;
       _step = 1;
-      final app = context.read<AppProvider>();
       _paidBy = app.currentUser.id;
       _selectedMembers = [app.currentUser.id];
     }
@@ -98,19 +116,35 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
 
     final app = context.read<AppProvider>();
-    app.addExpense(
-      _selectedGroupId,
-      Expense(
-        id: 'e${DateTime.now().millisecondsSinceEpoch}',
+    final isEditing = widget.expense != null;
+
+    if (isEditing) {
+      final updated = Expense(
+        id: widget.expense!.id,
         description: _description.trim(),
         amount: amount,
         paidBy: _paidBy,
         splitBetween: _splitBetween,
         category: _category,
-        date: DateTime.now().toIso8601String().split('T')[0],
+        date: widget.expense!.date,
         groupId: _selectedGroupId,
-      ),
-    );
+      );
+      app.updateExpense(_selectedGroupId, updated);
+    } else {
+      app.addExpense(
+        _selectedGroupId,
+        Expense(
+          id: 'e${DateTime.now().millisecondsSinceEpoch}',
+          description: _description.trim(),
+          amount: amount,
+          paidBy: _paidBy,
+          splitBetween: _splitBetween,
+          category: _category,
+          date: DateTime.now().toIso8601String().split('T')[0],
+          groupId: _selectedGroupId,
+        ),
+      );
+    }
     Navigator.of(context).pop(true);
   }
 
@@ -157,7 +191,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                               _step == 0
                                   ? 'Select Group'
                                   : _step == 1
-                                      ? 'Add Expense'
+                                      ? widget.expense != null
+                                          ? 'Edit Expense'
+                                          : 'Add Expense'
                                       : 'Split Settings',
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold),
@@ -854,7 +890,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('Save Expense'),
+                child: Text(widget.expense != null ? 'Save Changes' : 'Save Expense'),
               ),
             ),
           ],

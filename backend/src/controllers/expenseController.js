@@ -1,11 +1,18 @@
+/*
+ * expenseController.js — Expense CRUD + balance calculation
+ * These handlers can receive groupId/expenseId from URL params, query string,
+ * or request body — the expenseOptions() helper resolves whichever is present.
+ */
 const {
   createExpense: createExpenseService,
   deleteExpense: deleteExpenseService,
   getBalances: getBalancesService,
   listExpenses: listExpensesService,
+  recordSettlement: recordSettlementService,
   updateExpense: updateExpenseService,
 } = require("../services/expenseService");
 
+// Resolve groupId and expenseId from multiple possible sources (URL params, query, body)
 function expenseOptions(req) {
   return {
     groupId: req.params.groupId || req.query.groupId || req.body?.groupId,
@@ -58,10 +65,20 @@ async function getBalances(req, res, next) {
   }
 }
 
+async function recordSettlement(req, res, next) {
+  try {
+    const result = await recordSettlementService(req.body, req.params.groupId);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createExpense,
   deleteExpense,
   getBalances,
   listExpenses,
+  recordSettlement,
   updateExpense,
 };

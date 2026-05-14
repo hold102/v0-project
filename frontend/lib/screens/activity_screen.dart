@@ -1,3 +1,8 @@
+/*
+ * activity_screen.dart — Chronological feed of all expenses
+ * Shows stats (total records, total amount) at the top, then a list
+ * of every expense across all groups, grouped by date.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
@@ -15,7 +20,7 @@ class ActivityScreen extends StatelessWidget {
         // Collect all expenses
         final all = <Map<String, dynamic>>[];
         for (final g in app.groups) {
-          for (final e in g.expenses) {
+          for (final e in g.expenses.where((e) => e.category != ExpenseCategory.settlement)) {
             all.add({
               'expense': e,
               'groupName': g.name,

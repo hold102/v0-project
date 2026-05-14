@@ -1,3 +1,8 @@
+/*
+ * profile_screen.dart — User profile and settings
+ * Shows avatar, name, email, stat cards (groups, total spent, owed/owing),
+ * a settings menu (placeholder), and a logout button.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';

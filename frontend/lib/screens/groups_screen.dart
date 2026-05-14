@@ -1,3 +1,8 @@
+/*
+ * groups_screen.dart — List of all visible groups
+ * Each tile shows the group emoji, name, member/expense counts,
+ * and your personal balance within that group.
+ */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';

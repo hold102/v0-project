@@ -1,3 +1,11 @@
+/*
+ * main_scaffold.dart — Bottom-navigation shell
+ *
+ * Holds the 5-tab layout: Home, Groups, Add (+), Activity, Profile.
+ * Uses IndexedStack to keep tab state alive when switching.
+ * The middle "Add" tab pushes a full-screen AddExpenseScreen instead of
+ * staying in the tab, so it doesn't interfere with the bottom nav.
+ */
 import 'package:flutter/material.dart';
 import 'package:splitease/screens/home_screen.dart';
 import 'package:splitease/screens/groups_screen.dart';
@@ -18,7 +26,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   void _onTabChange(int index) {
     if (index == 2) {
-      // Add tab — push full screen
+      // The center "Add" button pushes a full-screen route instead of changing the tab
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const AddExpenseScreen(),
@@ -30,6 +38,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 
   void _onGroupSelect(String groupId) {
+    // Pushes the group detail screen — called from Home/Activity when a group is tapped
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GroupDetailScreen(groupId: groupId),

@@ -1,8 +1,12 @@
+/*
+ * user.dart — A user/member in the app
+ * id is the primary key, avatar is an emoji string, email is optional.
+ */
 class User {
   final String id;
   final String name;
-  final String avatar;
-  final String? email;
+  final String avatar;  // Emoji representation, e.g. "👤" or "😎"
+  final String? email;  // null for users added without registration
 
   const User({
     required this.id,
