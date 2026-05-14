@@ -42,18 +42,34 @@ class GroupCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 160,
-        padding: const EdgeInsets.all(12),
+        width: 168,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(group.emoji, style: const TextStyle(fontSize: 24)),
-            const SizedBox(height: 6),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(group.emoji, style: const TextStyle(fontSize: 22)),
+            ),
+            const SizedBox(height: 10),
             Text(group.name,
                 style:
                     const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -61,15 +77,16 @@ class GroupCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text('${group.members.length} members',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-            const SizedBox(height: 4),
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+            const Spacer(),
             Text(balanceText,
                 style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                     color: balanceColor)),
+            const SizedBox(height: 2),
             Text('Total RM ${group.totalExpenses.toStringAsFixed(2)}',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ],

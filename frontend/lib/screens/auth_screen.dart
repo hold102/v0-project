@@ -80,7 +80,14 @@ class _AuthScreenState extends State<AuthScreen> {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.12),
+                        gradient: LinearGradient(
+                          colors: [
+                            colorScheme.primary.withValues(alpha: 0.18),
+                            colorScheme.primary.withValues(alpha: 0.08),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Icon(
@@ -109,13 +116,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 1.35,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Form(
                       key: _formKey,
@@ -137,7 +151,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                           ],
                           TextFormField(
                             controller: _emailController,
@@ -157,7 +171,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
@@ -188,7 +202,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             },
                           ),
                           if (app.authError != null) ...[
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                             Text(
                               app.authError!,
                               style: const TextStyle(
@@ -197,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                           FilledButton(
                             onPressed:
                                 app.authLoading ? null : () => _submit(app),
@@ -223,7 +237,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
                   Wrap(
                     alignment: WrapAlignment.center,
                     crossAxisAlignment: WrapCrossAlignment.center,

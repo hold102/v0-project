@@ -46,9 +46,10 @@ class SplitEaseApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,  // Enable Material Design 3
-        // Default card styling — no elevation, rounded corners, subtle border
+        // Default card styling — subtle shadow, rounded corners, no border
         cardTheme: CardThemeData(
           elevation: 0,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(color: Colors.grey.shade200),
