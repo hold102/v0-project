@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense.dart';
+import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/widgets/group_card.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
   final void Function(String groupId) onGroupSelect;
@@ -23,7 +25,6 @@ class HomeScreen extends StatelessWidget {
 
         final totalOwed = app.getTotalOwed();
         final totalOwing = app.getTotalOwing();
-        final netBalance = totalOwed - totalOwing;
         final recent = app.getRecentActivity();
 
         return Column(
@@ -32,7 +33,7 @@ class HomeScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  const SizedBox(height: 60),
+                  SizedBox(height: MediaQuery.of(context).padding.top + 20),
                   // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -45,8 +46,8 @@ class HomeScreen extends StatelessWidget {
                             children: [
                               Text('Welcome back',
                                   style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 13)),
+                                      color: Colors.grey.shade500,
+                                      fontSize: 14)),
                               const SizedBox(height: 2),
                               Row(
                                 children: [
@@ -113,93 +114,76 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text('Net balance',
-                              style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${netBalance >= 0 ? "+" : ""}RM ${netBalance.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
                                       const Icon(Icons.arrow_downward_rounded,
-                                          color: Colors.greenAccent, size: 18),
+                                          color: Colors.greenAccent, size: 20),
                                       const SizedBox(width: 6),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Owed to you',
-                                              style: TextStyle(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.8),
-                                                  fontSize: 11)),
-                                          Text(
-                                              'RM ${totalOwed.toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600)),
-                                        ],
-                                      ),
+                                      Text('Owed to you',
+                                          style: TextStyle(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.8),
+                                              fontSize: 13)),
                                     ],
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(12),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'RM ${totalOwed.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold),
                                   ),
-                                  child: Row(
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
                                       const Icon(Icons.arrow_upward_rounded,
-                                          color: Colors.redAccent, size: 18),
+                                          color: Colors.redAccent, size: 20),
                                       const SizedBox(width: 6),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text('You owe',
-                                              style: TextStyle(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.8),
-                                                  fontSize: 11)),
-                                          Text(
-                                              'RM ${totalOwing.toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600)),
-                                        ],
-                                      ),
+                                      Text('You owe',
+                                          style: TextStyle(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.8),
+                                              fontSize: 13)),
                                     ],
                                   ),
-                                ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'RM ${totalOwing.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -295,6 +279,29 @@ class _RecentExpenseTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.read<AppProvider>();
     final payer = app.getUserById(expense.paidBy);
+    final config = CategoryConfig.fromCategory(expense.category);
+    final me = app.currentUser.id;
+    final iPaid = expense.paidBy == me;
+    final iSplit = expense.splitBetween.contains(me);
+    final myShare = iSplit ? expense.shareFor(me) : 0.0;
+
+    // Label + colour for my involvement
+    final String roleLabel;
+    final Color roleColor;
+    if (iPaid && iSplit) {
+      final lent = expense.amount - myShare;
+      roleLabel = lent > 0.01 ? 'You lent RM ${lent.toStringAsFixed(2)}' : 'You paid';
+      roleColor = AppColors.positiveBalance;
+    } else if (iPaid) {
+      roleLabel = 'You paid RM ${expense.amount.toStringAsFixed(2)}';
+      roleColor = AppColors.positiveBalance;
+    } else if (iSplit) {
+      roleLabel = 'You owe RM ${myShare.toStringAsFixed(2)}';
+      roleColor = AppColors.negativeBalance;
+    } else {
+      roleLabel = 'Not involved';
+      roleColor = Colors.grey;
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -304,45 +311,86 @@ class _RecentExpenseTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(groupEmoji, style: const TextStyle(fontSize: 22)),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(expense.description,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w500, fontSize: 15),
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${payer?.name ?? '?'} paid · $groupName',
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: [
-                    Text('RM ${expense.amount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 15)),
-                    Text(_formatDate(expense.date),
+                    // Category icon
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: config.color,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(config.emoji,
+                          style: const TextStyle(fontSize: 20)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(expense.description,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15),
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(groupEmoji,
+                                  style: const TextStyle(fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Text(groupName,
+                                  style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('RM ${expense.amount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(_formatDate(expense.date),
+                            style: TextStyle(
+                                color: Colors.grey.shade400, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Divider(color: Colors.grey.shade100, height: 1),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('${payer?.avatar ?? '👤'} ${payer?.name ?? '?'} paid',
                         style: TextStyle(
                             color: Colors.grey.shade500, fontSize: 12)),
+                    Text(
+                        ' · ${expense.splitBetween.length} people',
+                        style: TextStyle(
+                            color: Colors.grey.shade400, fontSize: 12)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: roleColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(roleLabel,
+                          style: TextStyle(
+                              color: roleColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                    ),
                   ],
                 ),
               ],

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
+import 'package:splitease/models/user.dart';
+import 'package:splitease/services/api_service.dart';
 
 class EditGroupScreen extends StatefulWidget {
   final String groupId;
@@ -13,8 +15,12 @@ class EditGroupScreen extends StatefulWidget {
 class _EditGroupScreenState extends State<EditGroupScreen> {
   late String _name;
   late String _emoji;
-  late List<String> _memberIds;
+  late List<User> _members;
   bool _saving = false;
+  late final TextEditingController _nameController;
+  final TextEditingController _emailController = TextEditingController();
+  String? _lookupError;
+  bool _lookupLoading = false;
 
   static const _emojis = [
     '🍕', '✈️', '🏠', '🎉', '💼', '🎮', '🛒', '☕', '🎬', '🏖️',
@@ -28,21 +34,28 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
     if (group != null) {
       _name = group.name;
       _emoji = group.emoji;
-      _memberIds = group.members.map((m) => m.id).toList();
+      _members = List<User>.from(group.members);
     } else {
       _name = '';
       _emoji = '🎉';
-      _memberIds = [];
+      _members = [];
     }
+    _nameController = TextEditingController(text: _name);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
   }
 
   void _save() {
-    if (_name.trim().isEmpty || _memberIds.length < 2) return;
+    if (_name.trim().isEmpty || _members.length < 2) return;
     setState(() => _saving = true);
 
     final app = context.read<AppProvider>();
-    final members = app.users.where((u) => _memberIds.contains(u.id)).toList();
-    app.updateGroup(widget.groupId, name: _name.trim(), emoji: _emoji, members: members);
+    app.updateGroup(widget.groupId, name: _name.trim(), emoji: _emoji, members: _members);
     Navigator.of(context).pop(true);
   }
 
@@ -124,7 +137,7 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
                   const SizedBox(height: 24),
                   // Group name
                   TextField(
-                    controller: TextEditingController(text: _name),
+                    controller: _nameController,
                     decoration: const InputDecoration(
                       hintText: 'e.g. Weekend Dinner',
                       labelText: 'Group Name',
@@ -132,80 +145,106 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
                     onChanged: (v) => _name = v,
                   ),
                   const SizedBox(height: 24),
-                  // Member selection
-                  Text('Select Members (${_memberIds.length})',
+                  // Member lookup
+                  Text('Members (${_members.length})',
                       style: TextStyle(
                           color: Colors.grey.shade700,
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: app.users.map((u) {
-                      final selected = _memberIds.contains(u.id);
-                      final isSelf = u.id == app.currentUser.id;
-                      return GestureDetector(
-                        onTap: isSelf
-                            ? null
-                            : () {
-                                setState(() {
-                                  if (selected) {
-                                    _memberIds.remove(u.id);
-                                  } else {
-                                    _memberIds.add(u.id);
-                                  }
-                                });
-                              },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: (MediaQuery.of(context).size.width - 70) / 2,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.05)
-                                : Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: selected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.grey.shade200,
-                              width: selected ? 2 : 1,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(u.avatar, style: const TextStyle(fontSize: 18)),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                  child: Text(u.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500, fontSize: 14))),
-                              if (selected)
-                                Icon(Icons.check_circle,
-                                    size: 20, color: Theme.of(context).colorScheme.primary),
-                            ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            hintText: 'Enter email to add member',
+                            errorText: _lookupError,
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                           ),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: _lookupLoading
+                              ? null
+                              : () async {
+                                  final email = _emailController.text.trim();
+                                  if (email.isEmpty) return;
+                                  setState(() {
+                                    _lookupError = null;
+                                    _lookupLoading = true;
+                                  });
+                                  try {
+                                    final user = await ApiService()
+                                        .lookupUserByEmail(email);
+                                    if (_members.any((m) => m.id == user.id)) {
+                                      setState(() {
+                                        _lookupError = 'Already a member.';
+                                        _lookupLoading = false;
+                                      });
+                                      return;
+                                    }
+                                    setState(() {
+                                      _members = [..._members, user];
+                                      _emailController.clear();
+                                      _lookupLoading = false;
+                                    });
+                                  } catch (e) {
+                                    setState(() {
+                                      _lookupError = e
+                                          .toString()
+                                          .replaceFirst('Exception: ', '');
+                                      _lookupLoading = false;
+                                    });
+                                  }
+                                },
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: _lookupLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Add'),
+                        ),
+                      ),
+                    ],
                   ),
+                  if (_members.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _members.map((u) {
+                        final isSelf = u.id == app.currentUser.id;
+                        return Chip(
+                          avatar: Text(u.avatar,
+                              style: const TextStyle(fontSize: 14)),
+                          label: Text(u.name),
+                          deleteIcon:
+                              isSelf ? null : const Icon(Icons.close, size: 16),
+                          onDeleted: isSelf
+                              ? null
+                              : () => setState(() => _members =
+                                  _members.where((m) => m.id != u.id).toList()),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 32),
                   FilledButton(
                     onPressed:
-                        _name.trim().isNotEmpty && _memberIds.length >= 2 && !_saving
+                        _name.trim().isNotEmpty && _members.length >= 2 && !_saving
                             ? _save
                             : null,
                     style: FilledButton.styleFrom(

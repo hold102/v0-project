@@ -4,6 +4,7 @@
  * delegate to groupService for all business logic and validation.
  */
 const {
+  addMemberToGroup: addMemberToGroupService,
   createGroup: createGroupService,
   deleteGroup: deleteGroupService,
   getGroupById: getGroupByIdService,
@@ -56,7 +57,17 @@ async function deleteGroup(req, res, next) {
   }
 }
 
+async function addMemberToGroup(req, res, next) {
+  try {
+    const group = await addMemberToGroupService(req.params.id, req.body.userId);
+    res.json(group);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
+  addMemberToGroup,
   createGroup,
   deleteGroup,
   getGroupById,

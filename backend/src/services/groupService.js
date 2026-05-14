@@ -9,19 +9,7 @@
 const { createId, todayIsoDate } = require("./idService");
 const { readDb, updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
-
-function normalizeText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeOptionalId(value, label) {
-  if (value === undefined) return undefined;
-  const id = normalizeText(value);
-  if (!id) {
-    throw new RequestError(`${label} must be text.`);
-  }
-  return id;
-}
+const { normalizeText, normalizeOptionalId } = require("../utils/normalize");
 
 // Groups need at least 2 unique members
 function validateMemberIds(memberIds) {
@@ -196,7 +184,29 @@ async function deleteGroup(id) {
   });
 }
 
+async function addMemberToGroup(groupId, userId) {
+  if (!groupId) throw new RequestError("Group id is required.");
+  if (!userId) throw new RequestError("User id is required.");
+
+  return updateDb((db) => {
+    const group = db.groups.find((g) => g.id === groupId);
+    if (!group) throw new RequestError("Group not found.", 404);
+    assertGroupIsVisible(db, group);
+
+    if (group.members.some((m) => m.id === userId)) {
+      throw new RequestError("User is already a member of this group.", 409);
+    }
+
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) throw new RequestError("User not found.", 404);
+
+    group.members.push(user);
+    return group;
+  });
+}
+
 module.exports = {
+  addMemberToGroup,
   createGroup,
   deleteGroup,
   getGroupById,

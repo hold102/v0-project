@@ -18,7 +18,7 @@ class GroupsScreen extends StatelessWidget {
       builder: (context, app, _) {
         return Column(
           children: [
-            const SizedBox(height: 60),
+            SizedBox(height: MediaQuery.of(context).padding.top + 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -29,11 +29,11 @@ class GroupsScreen extends StatelessWidget {
                           TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text('Manage your expense groups',
-                      style: TextStyle(color: Colors.grey.shade500)),
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Expanded(
               child: app.groups.isEmpty
                   ? Center(

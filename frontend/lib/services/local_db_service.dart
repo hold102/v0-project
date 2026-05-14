@@ -4,7 +4,8 @@
  * When the API is reachable, fetched data is cached here so the app still
  * shows the last known state on the next launch even without network.
  * Uses the sqflite package. Tables mirror the API's data model:
- * users, groups_table, group_members, expenses, expense_splits.
+ * users, groups_table, group_members, expenses, expense_splits,
+ * expense_split_amounts.
  */
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -26,8 +27,9 @@ class LocalDbService {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       join(dbPath, 'splitease.db'),
-      version: 1,
-      onCreate: _onCreate,  // Only runs when the DB file is created for the first time
+      version: 2,
+      onCreate: _onCreate,    // Only runs when the DB file is created for the first time
+      onUpgrade: _onUpgrade,  // Runs when an existing DB needs to migrate to a newer version
     );
     return _db!;
   }
@@ -60,6 +62,26 @@ class LocalDbService {
     await db.execute('''
       CREATE TABLE expense_splits (
         expense_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        PRIMARY KEY (expense_id, user_id)
+      )
+    ''');
+    await _createSplitAmountsTable(db);
+  }
+
+  // Migrate an existing v1 database to v2 by adding the split-amounts table.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createSplitAmountsTable(db);
+    }
+  }
+
+  // Extracted so both onCreate and onUpgrade can call it without duplication.
+  Future<void> _createSplitAmountsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS expense_split_amounts (
+        expense_id TEXT NOT NULL,
+        user_id    TEXT NOT NULL,
+        amount     REAL NOT NULL,
         PRIMARY KEY (expense_id, user_id)
       )
     ''');
@@ -129,6 +151,16 @@ class LocalDbService {
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
+        // Persist custom per-user amounts when present (null = equal split).
+        if (e.splitAmounts != null) {
+          e.splitAmounts!.forEach((uid, amount) async {
+            await txn.insert(
+              'expense_split_amounts',
+              {'expense_id': e.id, 'user_id': uid, 'amount': amount},
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          });
+        }
       }
     });
   }
@@ -149,14 +181,25 @@ class LocalDbService {
           await db.query('expenses', where: 'group_id = ?', whereArgs: [gId]);
       final expenses = <Expense>[];
       for (final eRow in expRows) {
+        final expenseId = eRow['id'] as String;
         final splitRows = await db.query('expense_splits',
-            where: 'expense_id = ?', whereArgs: [eRow['id'] as String]);
+            where: 'expense_id = ?', whereArgs: [expenseId]);
+        final amountRows = await db.query('expense_split_amounts',
+            where: 'expense_id = ?', whereArgs: [expenseId]);
+        // Restore custom split amounts when present; null means equal split.
+        final Map<String, double>? splitAmounts = amountRows.isEmpty
+            ? null
+            : {
+                for (final r in amountRows)
+                  r['user_id'] as String: (r['amount'] as num).toDouble(),
+              };
         expenses.add(Expense(
-          id: eRow['id'] as String,
+          id: expenseId,
           description: eRow['description'] as String,
           amount: (eRow['amount'] as num).toDouble(),
           paidBy: eRow['paid_by'] as String,
           splitBetween: splitRows.map((s) => s['user_id'] as String).toList(),
+          splitAmounts: splitAmounts,
           category: ExpenseCategory.values.firstWhere(
               (c) => c.name == eRow['category'],
               orElse: () => ExpenseCategory.other),
@@ -180,6 +223,7 @@ class LocalDbService {
   Future<void> clearAll() async {
     final db = await database;
     // Delete child tables first to avoid foreign-key issues (if FK enforcement is enabled)
+    await db.delete('expense_split_amounts');
     await db.delete('expense_splits');
     await db.delete('expenses');
     await db.delete('group_members');

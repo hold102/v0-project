@@ -1,7 +1,7 @@
 /*
  * widget_test.dart — Basic integration/smoke tests
  * Verifies that the app launches, key screens render, and navigation works.
- * Uses mock data created by AppProvider.createMockGroups().
+ * Uses locally defined test fixtures rather than internal AppProvider helpers.
  */
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +11,51 @@ import 'package:splitease/main_scaffold.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/group.dart';
+import 'package:splitease/models/user.dart';
 import 'package:splitease/providers/app_provider.dart';
+
+// ---------------------------------------------------------------------------
+// Shared test fixtures
+// ---------------------------------------------------------------------------
+
+final _me = User(id: 'u1', name: 'Me', avatar: '😊', email: 'me@test.com');
+final _bella = User(id: 'u2', name: 'Bella', avatar: '🌸', email: 'bella@test.com');
+final _alex = User(id: 'u3', name: 'Alex', avatar: '🦊', email: 'alex@test.com');
+
+final _testUsers = [_me, _bella, _alex];
+
+List<Group> _buildTestGroups() => [
+      Group(
+        id: 'g1',
+        name: 'Weekend Dinner',
+        emoji: '🍕',
+        members: _testUsers,
+        createdAt: '2026-05-14',
+        expenses: [
+          Expense(
+            id: 'e1',
+            description: 'Pizza',
+            amount: 90,
+            paidBy: _me.id,
+            splitBetween: [_me.id, _bella.id, _alex.id],
+            category: ExpenseCategory.food,
+            date: '2026-05-14',
+            groupId: 'g1',
+          ),
+        ],
+      ),
+    ];
+
+AppProvider _buildProvider() {
+  final provider = AppProvider();
+  provider.users = _testUsers;
+  provider.groups = _buildTestGroups();
+  return provider;
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 void main() {
   // Smoke test: does the app render the auth screen when not authenticated?
@@ -31,7 +75,7 @@ void main() {
   });
 
   testWidgets('Homepage renders key sections', (WidgetTester tester) async {
-    final provider = AppProvider()..groups = createMockGroups();
+    final provider = _buildProvider();
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -51,7 +95,7 @@ void main() {
 
   testWidgets('Homepage group card opens detail page',
       (WidgetTester tester) async {
-    final provider = AppProvider()..groups = createMockGroups();
+    final provider = _buildProvider();
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -69,7 +113,7 @@ void main() {
 
   testWidgets('Homepage add button opens add expense flow',
       (WidgetTester tester) async {
-    final provider = AppProvider()..groups = createMockGroups();
+    final provider = _buildProvider();
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -87,28 +131,29 @@ void main() {
 
   testWidgets('Group card does not show settled while members still owe',
       (WidgetTester tester) async {
-    final provider = AppProvider()
-      ..groups = [
-        Group(
-          id: 'g-unsettled',
-          name: 'Roommates',
-          emoji: '🏠',
-          members: [mockUsers[0], mockUsers[1], mockUsers[2]],
-          createdAt: '2026-05-14',
-          expenses: [
-            Expense(
-              id: 'e-unsettled',
-              description: 'Shared supplies',
-              amount: 20,
-              paidBy: mockUsers[1].id,
-              splitBetween: [mockUsers[1].id, mockUsers[2].id],
-              category: ExpenseCategory.shopping,
-              date: '2026-05-14',
-              groupId: 'g-unsettled',
-            ),
-          ],
-        ),
-      ];
+    final provider = AppProvider();
+    provider.users = _testUsers;
+    provider.groups = [
+      Group(
+        id: 'g-unsettled',
+        name: 'Roommates',
+        emoji: '🏠',
+        members: [_me, _bella, _alex],
+        createdAt: '2026-05-14',
+        expenses: [
+          Expense(
+            id: 'e-unsettled',
+            description: 'Shared supplies',
+            amount: 20,
+            paidBy: _bella.id,
+            splitBetween: [_bella.id, _alex.id],
+            category: ExpenseCategory.shopping,
+            date: '2026-05-14',
+            groupId: 'g-unsettled',
+          ),
+        ],
+      ),
+    ];
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(
@@ -122,7 +167,7 @@ void main() {
   });
 
   testWidgets('Balances tab shows who owes who', (WidgetTester tester) async {
-    final provider = AppProvider()..groups = createMockGroups();
+    final provider = _buildProvider();
 
     await tester.pumpWidget(
       ChangeNotifierProvider<AppProvider>.value(

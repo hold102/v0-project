@@ -10,10 +10,7 @@
 const { createId } = require("./idService");
 const { readDb, updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
-
-function normalizeText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
+const { normalizeText } = require("../utils/normalize");
 
 async function createOrReuseUser(body) {
   if (!body || typeof body.name !== "string" || !body.name.trim()) {
@@ -84,8 +81,26 @@ async function getUserById(id) {
   return publicUser(user);
 }
 
+async function getUserByEmail(email) {
+  if (typeof email !== "string" || !email.trim()) {
+    throw new RequestError("Email is required.");
+  }
+
+  const db = await readDb();
+  const user = db.users.find(
+    (u) => u.email && u.email.toLocaleLowerCase() === email.trim().toLocaleLowerCase()
+  );
+  if (!user) {
+    throw new RequestError("No user found with that email.", 404);
+  }
+
+  return publicUser(user);
+}
+
 module.exports = {
   createOrReuseUser,
   getUserById,
+  getUserByEmail,
   listUsers,
+  publicUser,
 };

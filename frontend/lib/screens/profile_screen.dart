@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -25,7 +26,7 @@ class ProfileScreen extends StatelessWidget {
           _MenuItem(Icons.dark_mode_outlined, 'Dark mode',
               'Switch app appearance', Colors.indigo),
           _MenuItem(Icons.credit_card_outlined, 'Payment methods',
-              'Manage your payment methods', Color(0xFF059669)),
+              'Manage your payment methods', AppColors.positiveBalance),
           _MenuItem(Icons.shield_outlined, 'Privacy and security',
               'Account security settings', Colors.amber),
           _MenuItem(Icons.settings_outlined, 'Account settings',
@@ -37,7 +38,7 @@ class ProfileScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            const SizedBox(height: 60),
+            SizedBox(height: MediaQuery.of(context).padding.top + 20),
             // Profile header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -73,7 +74,7 @@ class ProfileScreen extends StatelessWidget {
                       children: [
                         Text(app.currentUser.name,
                             style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.bold)),
+                                fontSize: 24, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 2),
                         Text(app.currentUser.email ?? '',
                             style: TextStyle(
@@ -109,12 +110,12 @@ class ProfileScreen extends StatelessWidget {
                   _StatCard(
                     title: 'RM ${totalOwed.toStringAsFixed(2)}',
                     subtitle: 'Owed to you',
-                    color: Color(0xFF059669),
+                    color: AppColors.positiveBalance,
                   ),
                   _StatCard(
                     title: 'RM ${totalOwing.toStringAsFixed(2)}',
                     subtitle: 'You owe',
-                    color: Color(0xFFE11D48),
+                    color: AppColors.negativeBalance,
                   ),
                 ],
               ),
@@ -170,17 +171,17 @@ class ProfileScreen extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Color(0xFFE11D48),
+                      color: AppColors.negativeBalance.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(Icons.logout_rounded,
-                        color: Color(0xFFE11D48), size: 22),
+                    child: const Icon(Icons.logout_rounded,
+                        color: AppColors.negativeBalance, size: 22),
                   ),
-                  title: Text('Log out',
+                  title: const Text('Log out',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFE11D48),
+                          color: AppColors.negativeBalance,
                           fontSize: 15)),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

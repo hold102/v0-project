@@ -313,4 +313,24 @@ class ApiService {
     );
     return jsonDecode(res.body);
   }
+
+  Future<User> lookupUserByEmail(String email) async {
+    final res = await http.get(
+      Uri.parse('$_baseUrl/users/lookup?email=${Uri.encodeQueryComponent(email)}'),
+    );
+    if (res.statusCode == 404) throw Exception('No user found with that email.');
+    if (res.statusCode != 200) throw Exception('Lookup failed.');
+    return User.fromJson(jsonDecode(res.body));
+  }
+
+  Future<Group> addMemberToGroup(String groupId, String userId) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/groups/$groupId/members'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId}),
+    );
+    if (res.statusCode == 409) throw Exception('User is already a member of this group.');
+    if (res.statusCode != 200) throw Exception('Failed to add member.');
+    return Group.fromJson(jsonDecode(res.body));
+  }
 }

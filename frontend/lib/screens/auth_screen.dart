@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -191,7 +192,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             Text(
                               app.authError!,
                               style: const TextStyle(
-                                color: Color(0xFFE11D48),
+                                color: AppColors.negativeBalance,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),

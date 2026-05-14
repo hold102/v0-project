@@ -4,16 +4,7 @@
  * the current user belongs to. Called once when the app loads.
  */
 const { readDb } = require("../services/supabaseService");
-
-// Strip sensitive fields from a user object before sending to the frontend
-function publicUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    avatar: user.avatar,
-    email: user.email,
-  };
-}
+const { publicUser } = require("../services/userService");
 
 async function getAppState(_req, res, next) {
   try {

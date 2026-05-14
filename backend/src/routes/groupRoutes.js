@@ -18,6 +18,7 @@
  */
 const express = require("express");
 const {
+  addMemberToGroup,
   createGroup,
   deleteGroup,
   getGroupById,
@@ -42,6 +43,7 @@ router.get("/:id", getGroupById);
 router.put("/:id", updateGroup);
 router.patch("/:id", updateGroup);
 router.delete("/:id", deleteGroup);
+router.post("/:id/members", addMemberToGroup);
 
 // Nested expense + balance routes (groupId from URL path)
 router.get("/:groupId/balances", getBalances);

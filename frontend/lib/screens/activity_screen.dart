@@ -47,7 +47,7 @@ class ActivityScreen extends StatelessWidget {
 
         return Column(
           children: [
-            const SizedBox(height: 60),
+            SizedBox(height: MediaQuery.of(context).padding.top + 20),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -58,11 +58,11 @@ class ActivityScreen extends StatelessWidget {
                           TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text('View all expense records',
-                      style: TextStyle(color: Colors.grey.shade500)),
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             // Stats
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),

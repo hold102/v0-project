@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/expense.dart';
+import 'package:splitease/models/user.dart';
+import 'package:splitease/services/api_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String? groupId;
@@ -41,7 +43,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   bool _isCreating = false;
   String _newGroupName = '';
   String _newGroupEmoji = '🎉';
-  List<String> _selectedMembers = [];
+  List<User> _selectedMembers = [];       // users added via email lookup
+  final TextEditingController _memberEmailController = TextEditingController();
+  String? _memberLookupError;
+  bool _memberLookupLoading = false;
+
+  // Mid-expense member addition (step 2)
+  bool _showMidAddField = false;
+  final TextEditingController _midMemberEmailController = TextEditingController();
+  String? _midMemberLookupError;
+  bool _midMemberLookupLoading = false;
 
   final _descFocus = FocusNode();
 
@@ -76,18 +87,20 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         _exactAmounts.addAll(e.splitAmounts!);
       }
       _step = 1;
-      _selectedMembers = [app.currentUser.id];
+      _selectedMembers = [app.currentUser];
     } else if (widget.groupId != null) {
       _selectedGroupId = widget.groupId!;
       _step = 1;
       _paidBy = app.currentUser.id;
-      _selectedMembers = [app.currentUser.id];
+      _selectedMembers = [app.currentUser];
     }
   }
 
   @override
   void dispose() {
     _descFocus.dispose();
+    _memberEmailController.dispose();
+    _midMemberEmailController.dispose();
     for (final c in _exactControllers.values) {
       c.dispose();
     }
@@ -156,12 +169,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void _createGroup() {
     if (_newGroupName.trim().isEmpty || _selectedMembers.length < 2) return;
     final app = context.read<AppProvider>();
-    final members =
-        app.users.where((u) => _selectedMembers.contains(u.id)).toList();
     final newGroup =
-        app.addGroup(_newGroupName.trim(), _newGroupEmoji, members);
+        app.addGroup(_newGroupName.trim(), _newGroupEmoji, _selectedMembers);
     _selectedGroupId = newGroup.id;
-    _splitBetween = members.map((m) => m.id).toList();
+    _splitBetween = _selectedMembers.map((m) => m.id).toList();
     _isCreating = false;
     _nextStep();
   }
@@ -239,8 +250,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         onTap: () {
                           if (_step == 0) {
                             Navigator.of(context).pop();
-                          } else if (_step == 1) {
-                            _prevStep();
                           } else {
                             _prevStep();
                           }
@@ -321,7 +330,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         const SizedBox(height: 16),
         // Create new group button
         GestureDetector(
-          onTap: () => setState(() => _isCreating = true),
+          onTap: () {
+            setState(() {
+              _isCreating = true;
+              _selectedMembers = [app.currentUser];
+              _newGroupName = '';
+              _newGroupEmoji = '🎉';
+              _memberEmailController.clear();
+              _memberLookupError = null;
+            });
+          },
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -471,78 +489,105 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           onChanged: (v) => setState(() => _newGroupName = v),
         ),
         const SizedBox(height: 24),
-        // Member selection
-        Text('Select Members (${_selectedMembers.length})',
+        // Member lookup by email
+        Text('Add Members (${_selectedMembers.length})',
             style: TextStyle(
                 color: Colors.grey.shade700,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: app.users.map((u) {
-            final selected = _selectedMembers.contains(u.id);
-            final isSelf = u.id == app.currentUser.id;
-            return GestureDetector(
-              onTap: isSelf
-                  ? null
-                  : () {
-                      setState(() {
-                        if (selected) {
-                          _selectedMembers.remove(u.id);
-                        } else {
-                          _selectedMembers.add(u.id);
-                        }
-                      });
-                    },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: (MediaQuery.of(context).size.width - 70) / 2,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.05)
-                      : Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade200,
-                    width: selected ? 2 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child:
-                          Text(u.avatar, style: const TextStyle(fontSize: 18)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Text(u.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w500, fontSize: 14))),
-                    if (selected)
-                      Icon(Icons.check_circle,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.primary),
-                  ],
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _memberEmailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'Enter email to add member',
+                  errorText: _memberLookupError,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
                 ),
               ),
-            );
-          }).toList(),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: _memberLookupLoading
+                    ? null
+                    : () async {
+                        final email = _memberEmailController.text.trim();
+                        if (email.isEmpty) return;
+                        setState(() {
+                          _memberLookupError = null;
+                          _memberLookupLoading = true;
+                        });
+                        try {
+                          final user =
+                              await ApiService().lookupUserByEmail(email);
+                          if (_selectedMembers.any((m) => m.id == user.id)) {
+                            setState(() {
+                              _memberLookupError = 'Already added.';
+                              _memberLookupLoading = false;
+                            });
+                            return;
+                          }
+                          setState(() {
+                            _selectedMembers = [..._selectedMembers, user];
+                            _memberEmailController.clear();
+                            _memberLookupLoading = false;
+                          });
+                        } catch (e) {
+                          setState(() {
+                            _memberLookupError = e
+                                .toString()
+                                .replaceFirst('Exception: ', '');
+                            _memberLookupLoading = false;
+                          });
+                        }
+                      },
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: _memberLookupLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Add'),
+              ),
+            ),
+          ],
         ),
+        if (_selectedMembers.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedMembers.map((u) {
+              final isSelf = u.id == app.currentUser.id;
+              return Chip(
+                avatar: Text(u.avatar,
+                    style: const TextStyle(fontSize: 14)),
+                label: Text(u.name),
+                deleteIcon: isSelf
+                    ? null
+                    : const Icon(Icons.close, size: 16),
+                onDeleted: isSelf
+                    ? null
+                    : () => setState(() => _selectedMembers =
+                        _selectedMembers
+                            .where((m) => m.id != u.id)
+                            .toList()),
+              );
+            }).toList(),
+          ),
+        ],
         const SizedBox(height: 32),
         Row(
           children: [
@@ -1052,6 +1097,131 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             );
           }),
+        const SizedBox(height: 8),
+        // Add member mid-expense
+        if (!_showMidAddField)
+          GestureDetector(
+            onTap: () => setState(() {
+              _showMidAddField = true;
+              _midMemberLookupError = null;
+              _midMemberEmailController.clear();
+            }),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_add_rounded,
+                      size: 18, color: Colors.grey.shade500),
+                  const SizedBox(width: 8),
+                  Text('Add someone by email',
+                      style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _midMemberEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Enter email address',
+                      errorText: _midMemberLookupError,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 42,
+                  child: FilledButton(
+                    onPressed: _midMemberLookupLoading
+                        ? null
+                        : () async {
+                            final email =
+                                _midMemberEmailController.text.trim();
+                            if (email.isEmpty) return;
+                            setState(() {
+                              _midMemberLookupError = null;
+                              _midMemberLookupLoading = true;
+                            });
+                            final provider = context.read<AppProvider>();
+                            try {
+                              final user =
+                                  await ApiService().lookupUserByEmail(email);
+                              final g = provider.getGroupById(_selectedGroupId);
+                              if (g != null &&
+                                  !g.members.any((m) => m.id == user.id)) {
+                                await provider.addMemberToGroup(
+                                    _selectedGroupId, user.id);
+                              }
+                              setState(() {
+                                if (!_splitBetween.contains(user.id)) {
+                                  _splitBetween.add(user.id);
+                                }
+                                _midMemberEmailController.clear();
+                                _midMemberLookupLoading = false;
+                                _showMidAddField = false;
+                              });
+                            } catch (e) {
+                              setState(() {
+                                _midMemberLookupError = e
+                                    .toString()
+                                    .replaceFirst('Exception: ', '');
+                                _midMemberLookupLoading = false;
+                              });
+                            }
+                          },
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _midMemberLookupLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Add'),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: () => setState(() {
+                    _showMidAddField = false;
+                    _midMemberLookupError = null;
+                  }),
+                  icon: Icon(Icons.close_rounded,
+                      size: 20, color: Colors.grey.shade400),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 32),
         Row(
           children: [

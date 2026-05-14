@@ -7,17 +7,38 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/expense_category.dart';
+import 'package:splitease/models/user.dart';
 import 'package:splitease/providers/app_provider.dart';
+
+// ---------------------------------------------------------------------------
+// Shared test helpers
+// ---------------------------------------------------------------------------
+
+final _me = User(id: 'u1', name: 'Me', avatar: '😊', email: 'me@test.com');
+final _bella = User(id: 'u2', name: 'Bella', avatar: '🌸');
+final _alex = User(id: 'u3', name: 'Alex', avatar: '🦊');
+
+/// Creates an AppProvider seeded with three users (_me, _bella, _alex).
+/// _me is current user (index 0).
+AppProvider _makeApp() {
+  final app = AppProvider();
+  app.users = [_me, _bella, _alex];
+  return app;
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 void main() {
   group('AppProvider.addGroup', () {
     test('auto-includes the current user in members', () {
-      final app = AppProvider();
-      // currentUser defaults to users.first (mockUsers[0] = "Me", id "u1").
+      final app = _makeApp();
       final me = app.currentUser;
       final others = app.users.where((u) => u.id != me.id).take(2).toList();
 
-      // Caller passes only the OTHER members — simulating the buggy UI path.
+      // Caller passes only the OTHER members — simulating the UI sending only
+      // the explicitly selected members and relying on auto-include.
       final newGroup = app.addGroup('Trip', '✈️', others);
 
       // Auto-include guarantees: current user is present.
@@ -28,7 +49,7 @@ void main() {
     });
 
     test('does not duplicate the current user if already passed in', () {
-      final app = AppProvider();
+      final app = _makeApp();
       final me = app.currentUser;
       final withMe = [me, app.users[1]];
 
@@ -39,7 +60,7 @@ void main() {
     });
 
     test('adds the new group to the optimistic in-memory list', () {
-      final app = AppProvider();
+      final app = _makeApp();
       final before = app.groups.length;
       app.addGroup('Trip', '✈️', [app.users[1], app.users[2]]);
       expect(app.groups.length, before + 1);
@@ -80,7 +101,7 @@ void main() {
 
   group('AppProvider.updateGroup', () {
     test('keeps the current user in members even if caller drops them', () {
-      final app = AppProvider();
+      final app = _makeApp();
       final me = app.currentUser;
       final created =
           app.addGroup('Trip', '✈️', [app.users[1], app.users[2]]);

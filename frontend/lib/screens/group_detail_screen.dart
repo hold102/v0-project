@@ -12,6 +12,8 @@ import 'package:splitease/models/group.dart';
 import 'package:splitease/models/balance.dart';
 import 'package:splitease/screens/add_expense_screen.dart';
 import 'package:splitease/screens/edit_group_screen.dart';
+import 'package:splitease/services/api_service.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -36,6 +38,165 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showAddMemberSheet(BuildContext context, String groupId) {
+    final emailController = TextEditingController();
+    String? errorText;
+    Map<String, dynamic>? foundUser;
+    bool loading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                  24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('Add Member',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: 'Enter email address',
+                      errorText: errorText,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (foundUser != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(foundUser!['avatar'] ?? '👤',
+                              style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 10),
+                          Text(foundUser!['name'] ?? '',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15)),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: loading
+                              ? null
+                              : () async {
+                                  setSheetState(() {
+                                    errorText = null;
+                                    loading = true;
+                                    foundUser = null;
+                                  });
+                                  try {
+                                    final user = await ApiService()
+                                        .lookupUserByEmail(
+                                            emailController.text.trim());
+                                    setSheetState(() {
+                                      foundUser = {
+                                        'id': user.id,
+                                        'name': user.name,
+                                        'avatar': user.avatar,
+                                      };
+                                      loading = false;
+                                    });
+                                  } catch (e) {
+                                    setSheetState(() {
+                                      errorText = e.toString().replaceFirst(
+                                          'Exception: ', '');
+                                      loading = false;
+                                    });
+                                  }
+                                },
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: loading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Text('Look up'),
+                        ),
+                      ),
+                      if (foundUser != null) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () async {
+                              try {
+                                await context
+                                    .read<AppProvider>()
+                                    .addMemberToGroup(
+                                        groupId, foundUser!['id']);
+                                if (sheetContext.mounted) {
+                                  Navigator.of(sheetContext).pop();
+                                }
+                              } catch (e) {
+                                setSheetState(() {
+                                  errorText = e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '');
+                                });
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: const Text('Add to Group'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -182,9 +343,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                     color: myBalance > 0.01
-                                        ? Color(0xFF059669)
+                                        ? AppColors.positiveBalance
                                         : myBalance < -0.01
-                                            ? Color(0xFFE11D48)
+                                            ? AppColors.negativeBalance
                                             : null,
                                   ),
                                 ),
@@ -237,6 +398,33 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                                         color: Colors.grey.shade500,
                                         fontSize: 13)),
                               ),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () => _showAddMemberSheet(context, group.id),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.person_add_rounded,
+                                        size: 15,
+                                        color: Colors.grey.shade600),
+                                    const SizedBox(width: 4),
+                                    Text('Add',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -272,9 +460,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                       unselectedLabelColor: Colors.grey.shade500,
                       padding: const EdgeInsets.all(4),
                       tabs: const [
-                        TabRow(
+                        _TabRow(
                             text: 'Expenses', icon: Icons.receipt_long_rounded),
-                        TabRow(
+                        _TabRow(
                             text: 'Balances', icon: Icons.swap_horiz_rounded),
                       ],
                     ),
@@ -299,10 +487,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   }
 }
 
-class TabRow extends StatelessWidget {
+class _TabRow extends StatelessWidget {
   final String text;
   final IconData icon;
-  const TabRow({super.key, required this.text, required this.icon});
+  const _TabRow({required this.text, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -326,11 +514,9 @@ class _ExpensesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible = expenses
-        .where((e) => e.category != ExpenseCategory.settlement)
-        .toList();
+    final hasRealExpenses = expenses.any((e) => e.category != ExpenseCategory.settlement);
 
-    if (visible.isEmpty) {
+    if (!hasRealExpenses) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
@@ -372,7 +558,7 @@ class _ExpensesTab extends StatelessWidget {
       );
     }
 
-    final sorted = List<Expense>.from(visible)
+    final sorted = List<Expense>.from(expenses)
       ..sort((a, b) => b.date.compareTo(a.date));
 
     return Padding(
@@ -384,19 +570,147 @@ class _ExpensesTab extends StatelessWidget {
             onDelete: () {
               context.read<AppProvider>().deleteExpense(groupId, expense.id);
             },
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AddExpenseScreen(
-                    groupId: groupId,
-                    expense: expense,
-                  ),
-                ),
-              );
-            },
+            onTap: () => _showExpenseDetail(context, expense, expenses),
           );
         }).toList(),
       ),
+    );
+  }
+
+  void _showExpenseDetail(BuildContext context, Expense expense, List<Expense> allExpenses) {
+    final app = context.read<AppProvider>();
+    final payer = app.getUserById(expense.paidBy);
+    final config = CategoryConfig.fromCategory(expense.category);
+
+    // A member is settled if they are the payer (already covered their share)
+    // or if a settlement expense exists from them to the payer.
+    bool isSettled(String userId) {
+      if (userId == expense.paidBy) return true;
+      return allExpenses.any((e) =>
+          e.category == ExpenseCategory.settlement &&
+          e.paidBy == userId &&
+          e.splitBetween.contains(expense.paidBy));
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: config.color,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(config.emoji,
+                        style: const TextStyle(fontSize: 22)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(expense.description,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 17)),
+                        const SizedBox(height: 2),
+                        Text(expense.date,
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  Text('RM ${expense.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 17)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text('Paid by',
+                  style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(payer?.avatar ?? '👤',
+                      style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Text(payer?.name ?? '?',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 15)),
+                  const Spacer(),
+                  Text('RM ${expense.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 15)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text('Split between',
+                  style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              ...expense.splitBetween.map((uid) {
+                final user = app.getUserById(uid);
+                final share = expense.splitAmounts?[uid] ?? expense.perPerson;
+                final settled = isSettled(uid);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Text(user?.avatar ?? '👤',
+                          style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(user?.name ?? '?',
+                            style: TextStyle(
+                                fontSize: 15,
+                                color: settled
+                                    ? Colors.grey.shade400
+                                    : null)),
+                      ),
+                      if (settled)
+                        const Icon(Icons.check_circle_rounded,
+                            color: AppColors.settledGreen, size: 18)
+                      else
+                        Text('RM ${share.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 15)),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -451,24 +765,40 @@ class _ExpenseCard extends StatelessWidget {
                               fontWeight: FontWeight.w600, fontSize: 15)),
                       const SizedBox(height: 2),
                       Text(
-                        '${payer?.name ?? '?'} paid · ${expense.splitBetween.length} people splitting',
+                        expense.category == ExpenseCategory.settlement
+                            ? '${payer?.name ?? '?'} paid ${app.getUserById(expense.splitBetween.firstOrNull ?? '')?.name ?? '?'}'
+                            : '${payer?.name ?? '?'} paid · ${expense.splitBetween.length} people splitting',
                         style: TextStyle(
                             color: Colors.grey.shade500, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('RM ${expense.amount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('Each RM ${expense.perPerson.toStringAsFixed(2)}',
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 12)),
-                  ],
-                ),
+                expense.category == ExpenseCategory.settlement
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.positiveBalance.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Settled',
+                            style: TextStyle(
+                                color: AppColors.positiveBalance,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13)),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('RM ${expense.amount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text('Each RM ${expense.perPerson.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                  color: Colors.grey.shade500, fontSize: 12)),
+                        ],
+                      ),
               ],
             ),
             const SizedBox(height: 12),
@@ -524,7 +854,7 @@ class _BalancesTab extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: Color(0xFF059669),
+                  color: AppColors.positiveBalance,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 alignment: Alignment.center,
@@ -557,7 +887,7 @@ class _BalancesTab extends StatelessWidget {
             final isMe = b.from == app.currentUser.id;
             final fromName = fromUser?.name ?? 'Unknown';
             final toName = toUser?.name ?? 'Unknown';
-            final accent = isMe ? Color(0xFFE11D48) : Color(0xFF059669);
+            final accent = isMe ? AppColors.negativeBalance : AppColors.positiveBalance;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),

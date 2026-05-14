@@ -20,15 +20,8 @@ const crypto = require("crypto");
 const { createId, todayIsoDate } = require("./idService");
 const { updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
-
-// Normalise email to lowercase for case-insensitive matching
-function normalizeEmail(value) {
-  return typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
-}
-
-function normalizeText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
+const { normalizeEmail, normalizeText } = require("../utils/normalize");
+const { publicUser } = require("./userService");
 
 function validateEmail(email) {
   if (!email || !email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
@@ -52,15 +45,6 @@ function verifyPassword(password, account) {
   const expected = Buffer.from(account.passwordHash, "hex");
   const actual = Buffer.from(hashPassword(password, account.salt), "hex");
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
-}
-
-function publicUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    avatar: user.avatar,
-    email: user.email,
-  };
 }
 
 async function register(body) {

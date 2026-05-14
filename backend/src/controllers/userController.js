@@ -7,6 +7,7 @@
 const {
   createOrReuseUser,
   getUserById: getUserByIdService,
+  getUserByEmail: getUserByEmailService,
   listUsers: listUsersService,
 } = require("../services/userService");
 
@@ -37,8 +38,18 @@ async function createUser(req, res, next) {
   }
 }
 
+async function lookupByEmail(req, res, next) {
+  try {
+    const user = await getUserByEmailService(req.query.email);
+    res.json(user);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   createUser,
   getUserById,
   listUsers,
+  lookupByEmail,
 };

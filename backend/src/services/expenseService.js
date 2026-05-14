@@ -16,22 +16,10 @@ const { createId, todayIsoDate } = require("./idService");
 const { readDb, updateDb } = require("./supabaseService");
 const { isExpenseCategory } = require("../models/categories");
 const { RequestError } = require("../models/requestError");
+const { normalizeText, normalizeOptionalId } = require("../utils/normalize");
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizeText(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeOptionalId(value, label) {
-  if (value === undefined) return undefined;
-  const id = normalizeText(value);
-  if (!id) {
-    throw new RequestError(`${label} must be text.`);
-  }
-  return id;
 }
 
 // Expenses can be sent as { expense: {...} } or as a flat object — normalise here

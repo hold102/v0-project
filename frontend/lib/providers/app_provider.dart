@@ -9,7 +9,7 @@
  * Data loading strategy (loadData):
  *   1. Try the backend API — if it returns data, use it and cache to SQLite
  *   2. If API fails, try the local SQLite cache
- *   3. If both fail, fall back to hardcoded mock data (createMockGroups)
+ *   3. If both fail, set groups to empty and expose an error banner
  *
  * Mutations are optimistic: the UI updates immediately, then the API call
  * fires in the background (fire-and-forget). The local SQLite cache is
@@ -27,106 +27,6 @@ import 'package:splitease/models/balance.dart';
 import 'package:splitease/services/api_service.dart';
 import 'package:splitease/services/local_db_service.dart';
 
-// Hardcoded fallback users — shown only when both API and local DB are unavailable
-const mockUsers = [
-  User(id: 'u1', name: 'Me', avatar: '👤', email: 'me@example.com'),
-  User(id: 'u2', name: 'Alex', avatar: '😎', email: 'ming@example.com'),
-  User(id: 'u3', name: 'Bella', avatar: '😊', email: 'hong@example.com'),
-  User(id: 'u4', name: 'Chris', avatar: '🤓', email: 'li@example.com'),
-  User(id: 'u5', name: 'Dana', avatar: '😄', email: 'wang@example.com'),
-];
-
-List<Group> createMockGroups() {
-  final u1 = mockUsers[0];
-  final u2 = mockUsers[1];
-  final u3 = mockUsers[2];
-  final u4 = mockUsers[3];
-  final u5 = mockUsers[4];
-
-  return [
-    Group(
-      id: 'g1',
-      name: 'Weekend Dinner',
-      emoji: '🍕',
-      members: [u1, u2, u3],
-      createdAt: '2026-05-01',
-      expenses: [
-        Expense(
-            id: 'e1',
-            description: 'Hotpot Dinner',
-            amount: 320,
-            paidBy: 'u1',
-            splitBetween: ['u1', 'u2', 'u3'],
-            category: ExpenseCategory.food,
-            date: '2026-05-10',
-            groupId: 'g1'),
-        Expense(
-            id: 'e2',
-            description: 'Ride Home',
-            amount: 45,
-            paidBy: 'u2',
-            splitBetween: ['u1', 'u2', 'u3'],
-            category: ExpenseCategory.transport,
-            date: '2026-05-10',
-            groupId: 'g1'),
-      ],
-    ),
-    Group(
-      id: 'g2',
-      name: 'Penang Trip',
-      emoji: '✈️',
-      members: [u1, u2, u4, u5],
-      createdAt: '2026-04-20',
-      expenses: [
-        Expense(
-            id: 'e3',
-            description: 'Hotel Booking',
-            amount: 800,
-            paidBy: 'u1',
-            splitBetween: ['u1', 'u2', 'u4', 'u5'],
-            category: ExpenseCategory.accommodation,
-            date: '2026-04-25',
-            groupId: 'g2'),
-        Expense(
-            id: 'e4',
-            description: 'Attraction Tickets',
-            amount: 240,
-            paidBy: 'u4',
-            splitBetween: ['u1', 'u2', 'u4', 'u5'],
-            category: ExpenseCategory.entertainment,
-            date: '2026-04-26',
-            groupId: 'g2'),
-        Expense(
-            id: 'e5',
-            description: 'Local Food',
-            amount: 180,
-            paidBy: 'u2',
-            splitBetween: ['u1', 'u2', 'u4', 'u5'],
-            category: ExpenseCategory.food,
-            date: '2026-04-26',
-            groupId: 'g2'),
-      ],
-    ),
-    Group(
-      id: 'g3',
-      name: 'Shared Utilities',
-      emoji: '🏠',
-      members: [u1, u3, u4],
-      createdAt: '2026-03-01',
-      expenses: [
-        Expense(
-            id: 'e6',
-            description: 'May Electricity Bill',
-            amount: 150,
-            paidBy: 'u3',
-            splitBetween: ['u1', 'u3', 'u4'],
-            category: ExpenseCategory.utilities,
-            date: '2026-05-05',
-            groupId: 'g3'),
-      ],
-    ),
-  ];
-}
 
 enum DataSource { loading, api, cache, mock }
 
@@ -136,7 +36,7 @@ const _kCurrentUserKey = 'splitease_current_user';
 class AppProvider extends ChangeNotifier {
   User? _currentUser;                               // null = not logged in
   DataSource _dataSource = DataSource.loading;
-  List<User> users = List.unmodifiable(mockUsers);  // all known users
+  List<User> users = const [];                       // all known users
   List<Group> groups = [];                           // groups visible to current user
   bool _loading = false;                             // true while loadData is fetching
   bool _authLoading = false;                         // true while login/register is in progress
@@ -255,12 +155,12 @@ class AppProvider extends ChangeNotifier {
           error: e, stackTrace: s, name: 'AppProvider');
     }
 
-    groups = createMockGroups();
+    groups = [];
     _ensureCurrentUserInUsers();
     _dataSource = DataSource.mock;
     _lastSyncError = apiError != null
-        ? 'Backend unreachable — showing demo data. ($apiError)'
-        : 'Showing demo data — no backend or cache available.';
+        ? 'Backend unreachable — could not load data. ($apiError)'
+        : 'Could not load data — no backend or cache available.';
     _loading = false;
     notifyListeners();
   }
@@ -477,6 +377,17 @@ class AppProvider extends ChangeNotifier {
     _cacheToLocalDb(users, groups);
   }
 
+  Future<void> addMemberToGroup(String groupId, String userId) async {
+    final updatedGroup = await ApiService().addMemberToGroup(groupId, userId);
+    groups = groups.map((g) => g.id == groupId ? updatedGroup : g).toList();
+    if (!users.any((u) => u.id == userId)) {
+      final user = updatedGroup.members.firstWhere((m) => m.id == userId);
+      users = [...users, user];
+    }
+    notifyListeners();
+    _cacheToLocalDb(users, groups);
+  }
+
   void addExpense(String groupId, Expense expense) {
     groups = groups.map((g) {
       if (g.id == groupId) {
@@ -558,12 +469,14 @@ class AppProvider extends ChangeNotifier {
           category: expense.category.name,
           date: expense.date,
         )
-        .catchError((Object e, StackTrace s) {
+        .then((_) {
+      _cacheToLocalDb(users, groups);
+    }).catchError((Object e, StackTrace s) {
       developer.log('updateExpense failed',
           error: e, stackTrace: s, name: 'AppProvider');
-      return expense;
+      _lastSyncError = 'Could not update expense "${expense.description}": $e';
+      notifyListeners();
     });
-    _cacheToLocalDb(users, groups);
   }
 
   void deleteExpense(String groupId, String expenseId) {
