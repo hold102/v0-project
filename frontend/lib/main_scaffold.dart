@@ -1,9 +1,7 @@
 /*
  * main_scaffold.dart — Bottom-navigation shell
  *
- * Holds the 4-tab layout: Home, Groups, Add (+), Profile.
- * Activity used to be a top-level tab; it now lives as a section on the
- * Profile page that pushes ActivityScreen as a route.
+ * Holds the 5-tab layout: Home, Groups, Add (+), Activity, Profile.
  * Uses IndexedStack to keep tab state alive when switching.
  * The middle "Add" tab pushes a full-screen AddExpenseScreen instead of
  * staying in the tab, so it doesn't interfere with the bottom nav.
@@ -14,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/screens/home_screen.dart';
 import 'package:splitease/screens/groups_screen.dart';
+import 'package:splitease/screens/activity_screen.dart';
 import 'package:splitease/screens/profile_screen.dart';
 import 'package:splitease/screens/group_detail_screen.dart';
 import 'package:splitease/screens/add_expense_screen.dart';
@@ -83,7 +82,8 @@ class _MainScaffoldState extends State<MainScaffold> {
       HomeScreen(onGroupSelect: _onGroupSelect),
       GroupsScreen(onGroupSelect: _onGroupSelect),
       const SizedBox.shrink(), // placeholder for add tab
-      ProfileScreen(onGroupSelect: _onGroupSelect),
+      ActivityScreen(onGroupSelect: _onGroupSelect),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
@@ -141,10 +141,16 @@ class _MainScaffoldState extends State<MainScaffold> {
                         // surrounding items don't slide under it.
                         const SizedBox(width: 56),
                         _NavItem(
-                          icon: Icons.person_rounded,
-                          label: 'Profile',
+                          icon: Icons.article_rounded,
+                          label: 'Activity',
                           isActive: _currentIndex == 3,
                           onTap: () => _onTabChange(3),
+                        ),
+                        _NavItem(
+                          icon: Icons.person_rounded,
+                          label: 'Profile',
+                          isActive: _currentIndex == 4,
+                          onTap: () => _onTabChange(4),
                         ),
                       ],
                     ),

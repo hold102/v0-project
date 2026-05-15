@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/models/user.dart';
 import 'package:splitease/providers/app_provider.dart';
-import 'package:splitease/screens/activity_screen.dart';
-import 'package:splitease/services/fx_service.dart';
 import 'package:splitease/widgets/glass_card.dart';
 import 'package:splitease/widgets/user_search_field.dart';
 import 'package:splitease/theme/app_theme.dart';
 
 class ProfileScreen extends StatelessWidget {
-  // Passed down so the Activity screen can deep-link into a group's detail.
-  final void Function(String groupId)? onGroupSelect;
-  const ProfileScreen({super.key, this.onGroupSelect});
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -96,122 +92,6 @@ class ProfileScreen extends StatelessWidget {
               onReject: (id) => context.read<AppProvider>().rejectFriendRequest(id),
             ),
             const SizedBox(height: 20),
-            // Preferred currency selector
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: GlassTile(
-                borderRadius: 16,
-                onTap: () => _showCurrencyPicker(context, app.currentUser.currency),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color:
-                            const Color(0xFF34D399).withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.payments_rounded,
-                          color: Color(0xFF34D399), size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text('Preferred currency',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: GlassColors.text,
-                              fontSize: 15)),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: GlassColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: GlassColors.border),
-                      ),
-                      child: Text(
-                        '${FxService.symbolFor(app.currentUser.currency)} ${app.currentUser.currency}',
-                        style: const TextStyle(
-                            color: GlassColors.text,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.chevron_right_rounded,
-                        color: GlassColors.textMuted, size: 22),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // Activity entry — pushes the full ActivityScreen as a route
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: GlassTile(
-                borderRadius: 16,
-                onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      backgroundColor: Colors.transparent,
-                      appBar: AppBar(
-                        backgroundColor: Colors.transparent,
-                        elevation: 0,
-                        iconTheme:
-                            const IconThemeData(color: GlassColors.text),
-                        title: const Text('Activity',
-                            style: TextStyle(
-                                color: GlassColors.text,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                      body: Stack(
-                        children: [
-                          Container(
-                            decoration: const BoxDecoration(
-                                gradient: GlassColors.bgGradient),
-                          ),
-                          ActivityScreen(
-                              onGroupSelect: onGroupSelect ?? (_) {}),
-                        ],
-                      ),
-                    ),
-                  ));
-                },
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF764BA2).withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.article_rounded,
-                          color: Color(0xFF9B7FD4), size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text('Activity',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: GlassColors.text,
-                              fontSize: 15)),
-                    ),
-                    const Icon(Icons.chevron_right_rounded,
-                        color: GlassColors.textMuted, size: 22),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             // Log out
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -281,99 +161,6 @@ class ProfileScreen extends StatelessWidget {
       },
     );
   }
-}
-
-Future<void> _showCurrencyPicker(BuildContext context, String current) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: const Color(0xFF1A1535),
-    isScrollControlled: true, // allow the sheet to grow past 50% height
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (sheetCtx) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text('Select preferred currency',
-                  style: TextStyle(
-                      color: GlassColors.text,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16)),
-              const SizedBox(height: 12),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: FxService.supportedCurrencies.map((code) {
-                    final picked = code == current;
-                    return InkWell(
-                      onTap: () async {
-                        Navigator.pop(sheetCtx);
-                        if (!picked) {
-                          await context
-                              .read<AppProvider>()
-                              .updateMyCurrency(code);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 14),
-                        margin: const EdgeInsets.only(bottom: 6),
-                        decoration: BoxDecoration(
-                          color: picked
-                              ? const Color(0xFF764BA2).withValues(alpha: 0.2)
-                              : GlassColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: picked
-                                  ? const Color(0xFF764BA2)
-                                  : GlassColors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 40,
-                              child: Text(FxService.symbolFor(code),
-                                  style: const TextStyle(
-                                      color: GlassColors.text,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 16)),
-                            ),
-                            Expanded(
-                              child: Text(code,
-                                  style: const TextStyle(
-                                      color: GlassColors.text,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
-                            ),
-                            if (picked)
-                              const Icon(Icons.check_circle_rounded,
-                                  color: Color(0xFF9B7FD4), size: 20),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }
 
 class _FriendsSection extends StatelessWidget {
