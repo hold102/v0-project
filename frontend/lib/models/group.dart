@@ -11,6 +11,7 @@ class Group {
   final String id;
   final String name;
   final String emoji;
+  final String description;
   final List<User> members;
   final List<Expense> expenses;
   final String createdAt;
@@ -19,6 +20,7 @@ class Group {
     required this.id,
     required this.name,
     required this.emoji,
+    this.description = '',
     required this.members,
     required this.expenses,
     required this.createdAt,
@@ -29,6 +31,7 @@ class Group {
       id: json['id'] as String,
       name: json['name'] as String,
       emoji: json['emoji'] as String,
+      description: (json['description'] as String?) ?? '',
       members: (json['members'] as List<dynamic>?)
               ?.map((e) => User.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -38,7 +41,7 @@ class Group {
               .toList() ??
           [],
       createdAt:
-          json['createdAt'] as String? ?? json['created_at'] as String? ?? '',  // camelCase with snake_case fallback
+          json['createdAt'] as String? ?? json['created_at'] as String? ?? '',
     );
   }
 
@@ -46,6 +49,7 @@ class Group {
         'id': id,
         'name': name,
         'emoji': emoji,
+        'description': description,
         'members': members.map((m) => m.toJson()).toList(),
         'expenses': expenses.map((e) => e.toJson()).toList(),
         'createdAt': createdAt,

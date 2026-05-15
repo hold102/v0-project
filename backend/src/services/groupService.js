@@ -82,6 +82,7 @@ async function createGroup(body) {
   const id = normalizeOptionalId(body?.id, "Group id");
   const name = normalizeText(body?.name);
   const emoji = normalizeText(body?.emoji);
+  const description = normalizeText(body?.description) || '';
   const memberIds = validateMemberIds(body?.memberIds);
 
   if (!name) {
@@ -104,6 +105,7 @@ async function createGroup(body) {
       id: id || createId("g"),
       name,
       emoji,
+      description,
       members,
       createdAt: todayIsoDate(),
       expenses: [],
@@ -119,6 +121,8 @@ async function updateGroup(id, body) {
   const groupId = normalizeOptionalId(id, "Group id");
   const name = body?.name === undefined ? undefined : normalizeText(body.name);
   const emoji = body?.emoji === undefined ? undefined : normalizeText(body.emoji);
+  const description =
+    body?.description === undefined ? undefined : (normalizeText(body.description) || '');
   const memberIds = body?.memberIds === undefined ? undefined : validateMemberIds(body.memberIds);
 
   if (!groupId) {
@@ -142,6 +146,7 @@ async function updateGroup(id, body) {
 
     if (name !== undefined) group.name = name;
     if (emoji !== undefined) group.emoji = emoji;
+    if (description !== undefined) group.description = description;
 
     if (memberIds !== undefined) {
       const memberIdSet = new Set(memberIds);
@@ -185,8 +190,12 @@ async function deleteGroup(id) {
 }
 
 async function addMemberToGroup(groupId, userId) {
-  if (!groupId) throw new RequestError("Group id is required.");
-  if (!userId) throw new RequestError("User id is required.");
+  if (!groupId) {
+    throw new RequestError("Group id is required.");
+  }
+  if (!userId) {
+    throw new RequestError("User id is required.");
+  }
 
   return updateDb((db) => {
     const group = db.groups.find((g) => g.id === groupId);
