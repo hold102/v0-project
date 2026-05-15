@@ -85,3 +85,35 @@ class AppAvatarSize {
   static const double lg = 48;
   static const double xl = 56;
 }
+
+/// Glassmorphism palette and gradient.
+class GlassColors {
+  const GlassColors._();
+
+  // Background gradient — defined once, referenced everywhere.
+  static const List<Color> bgColors = [
+    Color(0xFF0F0C29),
+    Color(0xFF302B63),
+    Color(0xFF24243E),
+  ];
+  static const bgGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: bgColors,
+    stops: [0.0, 0.5, 1.0],
+  );
+
+  // Glass surface — card background and border.
+  static const surface = Color(0x1AFFFFFF);      // 10% white — list tiles
+  static const surfaceHeavy = Color(0x26FFFFFF); // 15% white — featured cards
+  static const border = Color(0x33FFFFFF);        // 20% white
+
+  // Text on dark gradient.
+  static const text = Colors.white;
+  static const textMuted = Color(0x99FFFFFF); // 60% white
+
+  // Semantic accents that read well on dark.
+  static const positive = Color(0xFF34D399); // emerald green
+  static const negative = Color(0xFFFF6B8A); // coral red
+  static const settled = Color(0xFF34D399);
+}

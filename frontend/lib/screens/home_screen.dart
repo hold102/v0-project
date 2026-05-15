@@ -1,14 +1,11 @@
-/*
- * home_screen.dart — Main dashboard
- * Shows a net balance card (with gradient), a horizontal group carousel,
- * and a recent-activity list (last 5 expenses).
- */
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/widgets/group_card.dart';
+import 'package:splitease/widgets/glass_card.dart';
 import 'package:splitease/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -20,244 +17,250 @@ class HomeScreen extends StatelessWidget {
     return Consumer<AppProvider>(
       builder: (context, app, _) {
         if (app.loading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+              child: CircularProgressIndicator(color: Colors.white));
         }
 
         final totalOwed = app.getTotalOwed();
         final totalOwing = app.getTotalOwing();
+        // Total amount across all groups + the current user's own share.
+        final myId = app.currentUser.id;
+        final totalAmount = app.groups.fold<double>(
+            0, (sum, g) => sum + g.totalExpenses);
+        final mySpent = app.groups.fold<double>(0, (sum, g) {
+          for (final e in g.expenses) {
+            if (e.category.name == 'settlement') continue;
+            if (e.splitBetween.contains(myId)) sum += e.shareFor(myId);
+          }
+          return sum;
+        });
         final recent = app.getRecentActivity();
 
-        return Column(
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 24),
           children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 24),
+            SizedBox(height: MediaQuery.of(context).padding.top + 20),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  SizedBox(height: MediaQuery.of(context).padding.top + 20),
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Welcome back',
-                                  style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 14)),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(app.currentUser.name,
-                                        style: const TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.bold),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(app.currentUser.avatar,
-                                      style: const TextStyle(fontSize: 22)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(Icons.trending_up_rounded,
-                              color: Theme.of(context).colorScheme.primary),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Balance Card
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.8),
+                        const Text('Welcome back',
+                            style: TextStyle(
+                                color: GlassColors.textMuted, fontSize: 14)),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(app.currentUser.name,
+                                  style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: GlassColors.text),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(app.currentUser.avatar,
+                                style: const TextStyle(fontSize: 22)),
                           ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.arrow_downward_rounded,
-                                          color: Colors.greenAccent, size: 20),
-                                      const SizedBox(width: 6),
-                                      Text('Owed to you',
-                                          style: TextStyle(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.8),
-                                              fontSize: 13)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'RM ${totalOwed.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.arrow_upward_rounded,
-                                          color: Colors.redAccent, size: 20),
-                                      const SizedBox(width: 6),
-                                      Text('You owe',
-                                          style: TextStyle(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.8),
-                                              fontSize: 13)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'RM ${totalOwing.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  // Groups section
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('My Groups',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w600)),
-                        Text('${app.groups.length} groups',
-                            style: TextStyle(
-                                color: Colors.grey.shade500, fontSize: 13)),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 166,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: app.groups.length,
-                      itemBuilder: (context, index) {
-                        final group = app.groups[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: GroupCard(
-                            group: group,
-                            onTap: () => onGroupSelect(group.id),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  // Recent activity
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: Text('Recent Activity',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(height: 12),
-                  if (recent.isEmpty)
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
+                  const SizedBox(width: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: GlassColors.surfaceHeavy,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: GlassColors.border),
+                        ),
+                        child: const Icon(Icons.trending_up_rounded,
+                            color: Colors.white, size: 22),
                       ),
-                      child: const Center(
-                          child: Text('No activity yet',
-                              style: TextStyle(color: Colors.grey))),
                     ),
-                  for (final item in recent)
-                    _RecentExpenseTile(
-                      expense: item['expense'] as Expense,
-                      groupName: item['groupName'] as String,
-                      groupEmoji: item['groupEmoji'] as String,
-                      onTap: () => onGroupSelect(item['groupId'] as String),
-                    ),
+                  ),
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+            // Top stats — active groups + my total spending (own share).
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _HomeStatTile(
+                      title: 'RM ${totalAmount.toStringAsFixed(0)}',
+                      subtitle: 'Total amount',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _HomeStatTile(
+                      title: 'RM ${mySpent.toStringAsFixed(0)}',
+                      subtitle: 'Your total spent',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Balance Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: GlassCard(
+                borderRadius: 24,
+                padding: const EdgeInsets.all(20),
+                color: const Color(0x33764BA2), // tinted purple glass
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _BalanceSubCard(
+                        icon: Icons.arrow_downward_rounded,
+                        iconColor: GlassColors.positive,
+                        label: 'Owed to you',
+                        amount: 'RM ${totalOwed.toStringAsFixed(2)}',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _BalanceSubCard(
+                        icon: Icons.arrow_upward_rounded,
+                        iconColor: GlassColors.negative,
+                        label: 'You owe',
+                        amount: 'RM ${totalOwing.toStringAsFixed(2)}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            // Groups section header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('My Groups',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: GlassColors.text)),
+                  Text('${app.groups.length} groups',
+                      style: const TextStyle(
+                          color: GlassColors.textMuted, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 170,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: app.groups.length,
+                itemBuilder: (context, index) {
+                  final group = app.groups[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: GroupCard(
+                      group: group,
+                      onTap: () => onGroupSelect(group.id),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 28),
+            // Recent activity header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Text('Recent Activity',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: GlassColors.text)),
+            ),
+            const SizedBox(height: 12),
+            if (recent.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: GlassTile(
+                  padding: const EdgeInsets.all(32),
+                  child: const Center(
+                    child: Text('No activity yet',
+                        style: TextStyle(color: GlassColors.textMuted)),
+                  ),
+                ),
+              ),
+            for (final item in recent)
+              _RecentExpenseTile(
+                expense: item['expense'] as Expense,
+                groupName: item['groupName'] as String,
+                groupEmoji: item['groupEmoji'] as String,
+                onTap: () => onGroupSelect(item['groupId'] as String),
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+class _BalanceSubCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String amount;
+
+  const _BalanceSubCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: iconColor, size: 18),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: const TextStyle(
+                      color: GlassColors.textMuted, fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(amount,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 }
@@ -285,117 +288,113 @@ class _RecentExpenseTile extends StatelessWidget {
     final iSplit = expense.splitBetween.contains(me);
     final myShare = iSplit ? expense.shareFor(me) : 0.0;
 
-    // Label + colour for my involvement
     final String roleLabel;
     final Color roleColor;
     if (iPaid && iSplit) {
       final lent = expense.amount - myShare;
-      roleLabel = lent > 0.01 ? 'You lent RM ${lent.toStringAsFixed(2)}' : 'You paid';
-      roleColor = AppColors.positiveBalance;
+      roleLabel =
+          lent > 0.01 ? 'Lent RM ${lent.toStringAsFixed(2)}' : 'You paid';
+      roleColor = GlassColors.positive;
     } else if (iPaid) {
-      roleLabel = 'You paid RM ${expense.amount.toStringAsFixed(2)}';
-      roleColor = AppColors.positiveBalance;
+      roleLabel = 'Paid RM ${expense.amount.toStringAsFixed(2)}';
+      roleColor = GlassColors.positive;
     } else if (iSplit) {
-      roleLabel = 'You owe RM ${myShare.toStringAsFixed(2)}';
-      roleColor = AppColors.negativeBalance;
+      roleLabel = 'Owe RM ${myShare.toStringAsFixed(2)}';
+      roleColor = GlassColors.negative;
     } else {
       roleLabel = 'Not involved';
-      roleColor = Colors.grey;
+      roleColor = GlassColors.textMuted;
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: Card(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      child: GlassTile(
+        borderRadius: 18,
+        onTap: onTap,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    // Category icon
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: config.color,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(config.emoji,
-                          style: const TextStyle(fontSize: 20)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: config.color.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child:
+                      Text(config.emoji, style: const TextStyle(fontSize: 20)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(expense.description,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              color: GlassColors.text),
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Row(
                         children: [
-                          Text(expense.description,
+                          Text(groupEmoji,
+                              style: const TextStyle(fontSize: 12)),
+                          const SizedBox(width: 4),
+                          Text(groupName,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 15),
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Text(groupEmoji,
-                                  style: const TextStyle(fontSize: 12)),
-                              const SizedBox(width: 4),
-                              Text(groupName,
-                                  style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 12)),
-                            ],
-                          ),
+                                  color: GlassColors.textMuted, fontSize: 12)),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('RM ${expense.amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text(_formatDate(expense.date),
-                            style: TextStyle(
-                                color: Colors.grey.shade400, fontSize: 12)),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Divider(color: Colors.grey.shade100, height: 1),
-                const SizedBox(height: 8),
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('${payer?.avatar ?? '👤'} ${payer?.name ?? '?'} paid',
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 12)),
-                    Text(
-                        ' · ${expense.splitBetween.length} people',
-                        style: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 12)),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: roleColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(roleLabel,
-                          style: TextStyle(
-                              color: roleColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600)),
-                    ),
+                    Text('RM ${expense.amount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: GlassColors.text)),
+                    Text(_formatDate(expense.date),
+                        style: const TextStyle(
+                            color: GlassColors.textMuted, fontSize: 12)),
                   ],
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 10),
+            Divider(
+                color: Colors.white.withValues(alpha: 0.1), height: 1),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                    '${payer?.avatar ?? '👤'} ${payer == null ? '?' : app.displayName(payer)} paid · ${expense.splitBetween.length} people',
+                    style: const TextStyle(
+                        color: GlassColors.textMuted, fontSize: 12)),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: roleColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(roleLabel,
+                      style: TextStyle(
+                          color: roleColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -404,11 +403,43 @@ class _RecentExpenseTile extends StatelessWidget {
   String _formatDate(String dateStr) {
     final date = DateTime.tryParse(dateStr);
     if (date == null) return dateStr;
-    final now = DateTime.now();
-    final diff = now.difference(date).inDays;
+    final diff = DateTime.now().difference(date).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
     if (diff < 7) return '${diff}d ago';
     return '${date.month}/${date.day}';
+  }
+}
+
+class _HomeStatTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _HomeStatTile({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: GlassColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GlassColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: GlassColors.text)),
+          const SizedBox(height: 4),
+          Text(subtitle,
+              style: const TextStyle(
+                  color: GlassColors.textMuted, fontSize: 12)),
+        ],
+      ),
+    );
   }
 }

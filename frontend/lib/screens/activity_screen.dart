@@ -1,13 +1,10 @@
-/*
- * activity_screen.dart — Chronological feed of all expenses
- * Shows stats (total records, total amount) at the top, then a list
- * of every expense across all groups, grouped by date.
- */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/expense_category.dart';
+import 'package:splitease/widgets/glass_card.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class ActivityScreen extends StatelessWidget {
   final void Function(String groupId) onGroupSelect;
@@ -17,10 +14,10 @@ class ActivityScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (context, app, _) {
-        // Collect all expenses
         final all = <Map<String, dynamic>>[];
         for (final g in app.groups) {
-          for (final e in g.expenses.where((e) => e.category != ExpenseCategory.settlement)) {
+          for (final e in g.expenses
+              .where((e) => e.category != ExpenseCategory.settlement)) {
             all.add({
               'expense': e,
               'groupName': g.name,
@@ -38,7 +35,6 @@ class ActivityScreen extends StatelessWidget {
         final totalAmount = all.fold<double>(
             0, (sum, item) => sum + (item['expense'] as Expense).amount);
 
-        // Group by date
         final Map<String, List<Map<String, dynamic>>> grouped = {};
         for (final item in all) {
           final date = (item['expense'] as Expense).date;
@@ -54,35 +50,26 @@ class ActivityScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('Activity',
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: GlassColors.text)),
                   const SizedBox(height: 4),
-                  Text('View all expense records',
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                  const Text('View all expense records',
+                      style: TextStyle(
+                          color: GlassColors.textMuted, fontSize: 14)),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            // Stats
+            // Stats row
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
+                    child: GlassTile(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -90,45 +77,31 @@ class ActivityScreen extends StatelessWidget {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             alignment: Alignment.center,
-                            child: Icon(Icons.schedule_rounded,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.primary),
+                            child: const Icon(Icons.schedule_rounded,
+                                size: 18, color: Colors.white),
                           ),
                           const SizedBox(height: 12),
                           Text('${all.length}',
                               style: const TextStyle(
-                                  fontSize: 24, fontWeight: FontWeight.bold)),
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: GlassColors.text)),
                           const SizedBox(height: 2),
-                          Text('Total records',
+                          const Text('Total records',
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 12)),
+                                  color: GlassColors.textMuted, fontSize: 12)),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Container(
+                    child: GlassTile(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -136,25 +109,23 @@ class ActivityScreen extends StatelessWidget {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             alignment: Alignment.center,
-                            child: Icon(Icons.trending_up_rounded,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.primary),
+                            child: const Icon(Icons.trending_up_rounded,
+                                size: 18, color: Colors.white),
                           ),
                           const SizedBox(height: 12),
                           Text('RM ${totalAmount.toStringAsFixed(0)}',
                               style: const TextStyle(
-                                  fontSize: 24, fontWeight: FontWeight.bold)),
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: GlassColors.text)),
                           const SizedBox(height: 2),
-                          Text('Total amount',
+                          const Text('Total amount',
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 12)),
+                                  color: GlassColors.textMuted, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -175,23 +146,27 @@ class ActivityScreen extends StatelessWidget {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
+                                color: GlassColors.surface,
                                 borderRadius: BorderRadius.circular(24),
+                                border:
+                                    Border.all(color: GlassColors.border),
                               ),
                               alignment: Alignment.center,
-                              child: Icon(Icons.article_outlined,
-                                  size: 40, color: Colors.grey.shade400),
+                              child: const Icon(Icons.article_outlined,
+                                  size: 40, color: GlassColors.textMuted),
                             ),
                             const SizedBox(height: 16),
                             const Text('No expense records yet',
                                 style: TextStyle(
-                                    fontWeight: FontWeight.w600, fontSize: 16)),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                    color: GlassColors.text)),
                             const SizedBox(height: 8),
-                            Text(
+                            const Text(
                               'Start adding expenses to track splits',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 13),
+                                  color: GlassColors.textMuted, fontSize: 13),
                             ),
                           ],
                         ),
@@ -206,91 +181,94 @@ class ActivityScreen extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 8),
-                              child: Text(_formatDateHeader(entry.key),
-                                  style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600)),
+                              child: Text(
+                                _formatDateHeader(entry.key),
+                                style: const TextStyle(
+                                    color: GlassColors.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.5),
+                              ),
                             ),
                             ...entry.value.map((item) {
                               final expense = item['expense'] as Expense;
                               final groupName = item['groupName'] as String;
                               final groupEmoji = item['groupEmoji'] as String;
                               final groupId = item['groupId'] as String;
-                              final payer = app.getUserById(expense.paidBy);
-                              final config =
-                                  CategoryConfig.fromCategory(expense.category);
+                              final payer =
+                                  app.getUserById(expense.paidBy);
+                              final config = CategoryConfig.fromCategory(
+                                  expense.category);
 
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 24, vertical: 4),
-                                child: Card(
-                                  child: InkWell(
-                                    onTap: () => onGroupSelect(groupId),
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 48,
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              color: config.color,
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Text(config.emoji,
+                                child: GlassTile(
+                                  borderRadius: 18,
+                                  onTap: () => onGroupSelect(groupId),
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: config.color
+                                              .withValues(alpha: 0.9),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(config.emoji,
+                                            style: const TextStyle(
+                                                fontSize: 22)),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(expense.description,
                                                 style: const TextStyle(
-                                                    fontSize: 22)),
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(expense.description,
-                                                    style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontSize: 15),
-                                                    overflow:
-                                                        TextOverflow.ellipsis),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '${payer?.name ?? '?'} paid · $groupEmoji $groupName',
-                                                  style: TextStyle(
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                      fontSize: 13),
-                                                ),
-                                              ],
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    fontSize: 15,
+                                                    color: GlassColors.text),
+                                                overflow:
+                                                    TextOverflow.ellipsis),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${payer == null ? '?' : app.displayName(payer)} paid · $groupEmoji $groupName',
+                                              style: const TextStyle(
+                                                  color:
+                                                      GlassColors.textMuted,
+                                                  fontSize: 13),
                                             ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            'RM ${expense.amount.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                color: GlassColors.text),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                  'RM ${expense.amount.toStringAsFixed(2)}',
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 15)),
-                                              Text(
-                                                  '${expense.splitBetween.length} people splitting',
-                                                  style: TextStyle(
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                      fontSize: 12)),
-                                            ],
+                                          Text(
+                                            '${expense.splitBetween.length} people',
+                                            style: const TextStyle(
+                                                color: GlassColors.textMuted,
+                                                fontSize: 12),
                                           ),
                                         ],
                                       ),
-                                    ),
+                                    ],
                                   ),
                                 ),
                               );
@@ -310,8 +288,7 @@ class ActivityScreen extends StatelessWidget {
 String _formatDateHeader(String dateStr) {
   final date = DateTime.tryParse(dateStr);
   if (date == null) return dateStr;
-  final now = DateTime.now();
-  final diff = now.difference(date).inDays;
+  final diff = DateTime.now().difference(date).inDays;
   if (diff == 0) return 'Today';
   if (diff == 1) return 'Yesterday';
   if (diff < 7) return '${diff}d ago';

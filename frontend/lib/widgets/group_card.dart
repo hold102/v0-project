@@ -1,11 +1,8 @@
-/*
- * group_card.dart — A compact horizontal card for the home screen carousel
- * Shows emoji, name, member count, and the current user's balance status.
- */
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/group.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class GroupCard extends StatelessWidget {
   final Group group;
@@ -17,7 +14,7 @@ class GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final balances = app.calculateBalances(group);
-    final hasOutstandingBalances = balances.isNotEmpty;
+    final hasOutstanding = balances.isNotEmpty;
     final myBalance = balances.fold<double>(0, (acc, b) {
       if (b.to == app.currentUser.id) return acc + b.amount;
       if (b.from == app.currentUser.id) return acc - b.amount;
@@ -25,17 +22,17 @@ class GroupCard extends StatelessWidget {
     });
 
     final balanceColor = myBalance > 0.01
-        ? Colors.green.shade600
+        ? GlassColors.positive
         : myBalance < -0.01
-            ? Colors.red.shade500
-            : hasOutstandingBalances
-                ? Colors.orange.shade700
-                : Colors.grey;
+            ? GlassColors.negative
+            : hasOutstanding
+                ? Colors.orange.shade300
+                : GlassColors.textMuted;
     final balanceText = myBalance > 0.01
         ? '+RM ${myBalance.toStringAsFixed(2)}'
         : myBalance < -0.01
             ? '-RM ${myBalance.abs().toStringAsFixed(2)}'
-            : hasOutstandingBalances
+            : hasOutstanding
                 ? 'Unsettled'
                 : 'Settled';
 
@@ -45,16 +42,9 @@ class GroupCard extends StatelessWidget {
         width: 168,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: GlassColors.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          border: Border.all(color: GlassColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +53,7 @@ class GroupCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
@@ -71,13 +61,16 @@ class GroupCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(group.name,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: GlassColors.text),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text('${group.members.length} members',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                style:
+                    const TextStyle(color: GlassColors.textMuted, fontSize: 12)),
             const Spacer(),
             Text(balanceText,
                 style: TextStyle(
@@ -86,7 +79,8 @@ class GroupCard extends StatelessWidget {
                     color: balanceColor)),
             const SizedBox(height: 2),
             Text('Total RM ${group.totalExpenses.toStringAsFixed(2)}',
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                style:
+                    const TextStyle(color: GlassColors.textMuted, fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ],

@@ -1,20 +1,23 @@
 /*
  * main_scaffold.dart — Bottom-navigation shell
  *
- * Holds the 5-tab layout: Home, Groups, Add (+), Activity, Profile.
+ * Holds the 4-tab layout: Home, Groups, Add (+), Profile.
+ * Activity used to be a top-level tab; it now lives as a section on the
+ * Profile page that pushes ActivityScreen as a route.
  * Uses IndexedStack to keep tab state alive when switching.
  * The middle "Add" tab pushes a full-screen AddExpenseScreen instead of
  * staying in the tab, so it doesn't interfere with the bottom nav.
  */
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/screens/home_screen.dart';
 import 'package:splitease/screens/groups_screen.dart';
-import 'package:splitease/screens/activity_screen.dart';
 import 'package:splitease/screens/profile_screen.dart';
 import 'package:splitease/screens/group_detail_screen.dart';
 import 'package:splitease/screens/add_expense_screen.dart';
+import 'package:splitease/theme/app_theme.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -51,7 +54,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final app = context.watch<AppProvider>();
 
     // Surface any backend sync failure as a snackbar so the user sees what
@@ -81,81 +83,103 @@ class _MainScaffoldState extends State<MainScaffold> {
       HomeScreen(onGroupSelect: _onGroupSelect),
       GroupsScreen(onGroupSelect: _onGroupSelect),
       const SizedBox.shrink(), // placeholder for add tab
-      ActivityScreen(onGroupSelect: _onGroupSelect),
-      const ProfileScreen(),
+      ProfileScreen(onGroupSelect: _onGroupSelect),
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex.clamp(0, screens.length - 1),
-        children: screens,
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Full-screen gradient background shared by all tabs
+          Container(
+            decoration: const BoxDecoration(gradient: GlassColors.bgGradient),
+          ),
+          // Tab content
+          IndexedStack(
+            index: _currentIndex.clamp(0, screens.length - 1),
+            children: screens,
+          ),
+        ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
+      bottomNavigationBar: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1535).withValues(alpha: 0.85),
+              border: Border(
+                top: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.15), width: 1),
+              ),
             ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
-                  isActive: _currentIndex == 0,
-                  onTap: () => _onTabChange(0),
-                ),
-                _NavItem(
-                  icon: Icons.group_rounded,
-                  label: 'Groups',
-                  isActive: _currentIndex == 1,
-                  onTap: () => _onTabChange(1),
-                ),
-                // Add button (prominent)
-                GestureDetector(
-                  onTap: () => _onTabChange(2),
-                  child: Transform.translate(
-                    offset: const Offset(0, -8),
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.add_rounded,
-                          color: Colors.white, size: 28),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                // Stack lets the FAB visually sit on top of the bar without
+                // forcing the Row height to grow. The Row only holds nav items
+                // (one of which is a spacer that reserves the centered FAB slot).
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _NavItem(
+                          icon: Icons.home_rounded,
+                          label: 'Home',
+                          isActive: _currentIndex == 0,
+                          onTap: () => _onTabChange(0),
+                        ),
+                        _NavItem(
+                          icon: Icons.group_rounded,
+                          label: 'Groups',
+                          isActive: _currentIndex == 1,
+                          onTap: () => _onTabChange(1),
+                        ),
+                        // Invisible spacer: reserves room for the FAB so the
+                        // surrounding items don't slide under it.
+                        const SizedBox(width: 56),
+                        _NavItem(
+                          icon: Icons.person_rounded,
+                          label: 'Profile',
+                          isActive: _currentIndex == 3,
+                          onTap: () => _onTabChange(3),
+                        ),
+                      ],
                     ),
-                  ),
+                    // Centered FAB
+                    Positioned(
+                      top: -8,
+                      child: GestureDetector(
+                        onTap: () => _onTabChange(2),
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF764BA2), Color(0xFF667EEA)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF764BA2)
+                                    .withValues(alpha: 0.5),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.add_rounded,
+                              color: Colors.white, size: 28),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                _NavItem(
-                  icon: Icons.article_rounded,
-                  label: 'Activity',
-                  isActive: _currentIndex == 3,
-                  onTap: () => _onTabChange(3),
-                ),
-                _NavItem(
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
-                  isActive: _currentIndex == 4,
-                  onTap: () => _onTabChange(4),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -179,8 +203,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = isActive ? colorScheme.primary : Colors.grey.shade500;
+    final color = isActive ? Colors.white : Colors.white.withValues(alpha: 0.45);
 
     return GestureDetector(
       onTap: onTap,
@@ -195,7 +218,7 @@ class _NavItem extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               decoration: BoxDecoration(
                 color: isActive
-                    ? colorScheme.primary.withValues(alpha: 0.12)
+                    ? Colors.white.withValues(alpha: 0.15)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),

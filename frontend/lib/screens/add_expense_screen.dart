@@ -11,7 +11,53 @@ import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/models/expense_category.dart';
 import 'package:splitease/models/expense.dart';
 import 'package:splitease/models/user.dart';
-import 'package:splitease/services/api_service.dart';
+import 'package:splitease/services/fx_service.dart';
+import 'package:splitease/theme/app_theme.dart';
+import 'package:splitease/widgets/user_search_field.dart';
+
+InputDecoration _glassInput({
+  String? hint,
+  String? label,
+  String? errorText,
+  Widget? prefixIcon,
+  bool isDense = false,
+  EdgeInsetsGeometry? contentPadding,
+}) {
+  return InputDecoration(
+    hintText: hint,
+    labelText: label,
+    errorText: errorText,
+    prefixIcon: prefixIcon,
+    isDense: isDense,
+    hintStyle: const TextStyle(color: GlassColors.textMuted),
+    labelStyle: const TextStyle(color: GlassColors.textMuted),
+    errorStyle: const TextStyle(color: GlassColors.negative),
+    filled: true,
+    fillColor: GlassColors.surface,
+    contentPadding:
+        contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: GlassColors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: GlassColors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.white54),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: GlassColors.negative.withValues(alpha: 0.6)),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: GlassColors.negative),
+    ),
+  );
+}
 
 class AddExpenseScreen extends StatefulWidget {
   final String? groupId;
@@ -25,48 +71,29 @@ class AddExpenseScreen extends StatefulWidget {
 enum _SplitMode { equal, exact }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
-  int _step = 0; // 0=select group, 1=details, 2=split
+  int _step = 0;
   String _selectedGroupId = '';
   String _description = '';
   String _amount = '';
+  String _currency = 'MYR';
   ExpenseCategory _category = ExpenseCategory.food;
   String _paidBy = '';
   List<String> _splitBetween = [];
 
-  // Split mode: equal = total/N for each member. exact = per-user dollar inputs.
   _SplitMode _splitMode = _SplitMode.equal;
-  // Controllers + current value for each user's exact share. Only used in exact mode.
   final Map<String, TextEditingController> _exactControllers = {};
   final Map<String, double> _exactAmounts = {};
 
-  // New group fields
   bool _isCreating = false;
   String _newGroupName = '';
+  String _newGroupDescription = '';
   String _newGroupEmoji = '🎉';
-  List<User> _selectedMembers = [];       // users added via email lookup
-  final TextEditingController _memberEmailController = TextEditingController();
-  String? _memberLookupError;
-  bool _memberLookupLoading = false;
-
-  // Mid-expense member addition (step 2)
-  bool _showMidAddField = false;
-  final TextEditingController _midMemberEmailController = TextEditingController();
-  String? _midMemberLookupError;
-  bool _midMemberLookupLoading = false;
+  List<User> _selectedMembers = [];
 
   final _descFocus = FocusNode();
 
   static const _emojis = [
-    '🍕',
-    '✈️',
-    '🏠',
-    '🎉',
-    '💼',
-    '🎮',
-    '🛒',
-    '☕',
-    '🎬',
-    '🏖️'
+    '🍕', '✈️', '🏠', '🎉', '💼', '🎮', '🛒', '☕', '🎬', '🏖️'
   ];
 
   @override
@@ -78,10 +105,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _selectedGroupId = e.groupId;
       _description = e.description;
       _amount = e.amount.toString();
+      _currency = e.currency;
       _category = e.category;
       _paidBy = e.paidBy;
       _splitBetween = List<String>.from(e.splitBetween);
-      // Restore exact-mode if the existing expense uses custom amounts.
       if (e.splitAmounts != null && e.splitAmounts!.isNotEmpty) {
         _splitMode = _SplitMode.exact;
         _exactAmounts.addAll(e.splitAmounts!);
@@ -93,29 +120,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _step = 1;
       _paidBy = app.currentUser.id;
       _selectedMembers = [app.currentUser];
+      _currency = app.currentUser.currency;
+    } else {
+      // Launched from the global "+" button — go straight to create-group form.
+      // Expense creation for existing groups happens from the group detail screen.
+      _isCreating = true;
+      _selectedMembers = [app.currentUser];
+      _currency = app.currentUser.currency;
     }
   }
 
   @override
   void dispose() {
     _descFocus.dispose();
-    _memberEmailController.dispose();
-    _midMemberEmailController.dispose();
     for (final c in _exactControllers.values) {
       c.dispose();
     }
     super.dispose();
   }
 
-  // Make sure each member in _splitBetween has a controller in exact mode.
-  // Removes controllers for members no longer in the list. Initial value:
-  // existing _exactAmounts entry, else equal share of the total amount.
   void _syncExactControllers() {
     final amount = double.tryParse(_amount) ?? 0;
     final equalShare =
         _splitBetween.isNotEmpty ? amount / _splitBetween.length : 0.0;
 
-    // Drop controllers for users no longer participating.
     final stale = _exactControllers.keys
         .where((id) => !_splitBetween.contains(id))
         .toList();
@@ -124,7 +152,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _exactAmounts.remove(id);
     }
 
-    // Add controllers for newly added members.
     for (final id in _splitBetween) {
       if (!_exactControllers.containsKey(id)) {
         final seed = _exactAmounts[id] ?? equalShare;
@@ -169,8 +196,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void _createGroup() {
     if (_newGroupName.trim().isEmpty || _selectedMembers.length < 2) return;
     final app = context.read<AppProvider>();
-    final newGroup =
-        app.addGroup(_newGroupName.trim(), _newGroupEmoji, _selectedMembers);
+    final newGroup = app.addGroup(
+      _newGroupName.trim(),
+      _newGroupEmoji,
+      _selectedMembers,
+      description: _newGroupDescription.trim(),
+    );
     _selectedGroupId = newGroup.id;
     _splitBetween = _selectedMembers.map((m) => m.id).toList();
     _isCreating = false;
@@ -178,23 +209,29 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amount);
+    final rawAmount = double.tryParse(_amount);
     if (_description.trim().isEmpty ||
-        amount == null ||
-        amount <= 0 ||
+        rawAmount == null ||
+        rawAmount <= 0 ||
         _selectedGroupId.isEmpty ||
         _paidBy.isEmpty ||
         _splitBetween.isEmpty) {
       return;
     }
-    // In exact mode, enforce sum-matches before letting the user save.
     if (_splitMode == _SplitMode.exact && !_exactSumMatches) return;
 
-    // Build splitAmounts (only when in exact mode and the set covers everyone).
+    // Convert the entered amount + custom splits from the chosen currency to
+    // MYR at submit time, so the database only ever stores MYR. This keeps all
+    // totals/balances consistent — no mixed-currency summing anywhere.
+    double toMyr(double v) =>
+        FxService().convert(v, _currency, 'MYR') ?? v;
+
+    final amount = toMyr(rawAmount);
+
     final Map<String, double>? splitAmounts = _splitMode == _SplitMode.exact
         ? {
             for (final id in _splitBetween)
-              id: (_exactAmounts[id] ?? 0).toDouble(),
+              id: toMyr((_exactAmounts[id] ?? 0).toDouble()),
           }
         : null;
 
@@ -212,6 +249,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         category: _category,
         date: widget.expense!.date,
         groupId: _selectedGroupId,
+        currency: 'MYR',
       );
       app.updateExpense(_selectedGroupId, updated);
     } else {
@@ -227,6 +265,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           category: _category,
           date: DateTime.now().toIso8601String().split('T')[0],
           groupId: _selectedGroupId,
+          currency: 'MYR',
         ),
       );
     }
@@ -236,84 +275,93 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
-              child: Column(
-                children: [
-                  Row(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(gradient: GlassColors.bgGradient),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 24, 0),
+                  child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (_step == 0) {
-                            Navigator.of(context).pop();
-                          } else {
-                            _prevStep();
-                          }
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: const Icon(Icons.arrow_back_rounded, size: 20),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _step == 0
-                                  ? 'Select Group'
-                                  : _step == 1
-                                      ? widget.expense != null
-                                          ? 'Edit Expense'
-                                          : 'Add Expense'
-                                      : 'Split Settings',
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              if (_step == 0) {
+                                Navigator.of(context).pop();
+                              } else {
+                                _prevStep();
+                              }
+                            },
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: GlassColors.surface,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: GlassColors.border),
+                              ),
+                              child: const Icon(Icons.arrow_back_rounded,
+                                  size: 20, color: GlassColors.text),
                             ),
-                            Text('Step ${_step + 1}/3',
-                                style: TextStyle(
-                                    color: Colors.grey.shade500, fontSize: 13)),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _step == 0
+                                      ? (_isCreating ? 'Create Group' : 'Select Group')
+                                      : _step == 1
+                                          ? widget.expense != null
+                                              ? 'Edit Expense'
+                                              : 'Add Expense'
+                                          : 'Split Settings',
+                                  style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: GlassColors.text),
+                                ),
+                                Text('Step ${_step + 1}/3',
+                                    style: const TextStyle(
+                                        color: GlassColors.textMuted,
+                                        fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          _ProgressSegment(filled: true),
+                          const SizedBox(width: 6),
+                          _ProgressSegment(filled: _step >= 1),
+                          const SizedBox(width: 6),
+                          _ProgressSegment(filled: _step >= 2),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Progress bar
-                  Row(
-                    children: [
-                      _ProgressSegment(filled: true),
-                      const SizedBox(width: 6),
-                      _ProgressSegment(filled: _step >= 1),
-                      const SizedBox(width: 6),
-                      _ProgressSegment(filled: _step >= 2),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: _step == 0
+                      ? _buildStep0()
+                      : _step == 1
+                          ? _buildStep1()
+                          : _buildStep2(),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            // Content
-            Expanded(
-              child: _step == 0
-                  ? _buildStep0()
-                  : _step == 1
-                      ? _buildStep1()
-                      : _buildStep2(),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -325,10 +373,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
-        Text('Select a group to add an expense',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+        const Text('Select a group to add an expense',
+            style: TextStyle(color: GlassColors.textMuted, fontSize: 14)),
         const SizedBox(height: 16),
-        // Create new group button
         GestureDetector(
           onTap: () {
             setState(() {
@@ -336,23 +383,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               _selectedMembers = [app.currentUser];
               _newGroupName = '';
               _newGroupEmoji = '🎉';
-              _memberEmailController.clear();
-              _memberLookupError = null;
             });
           },
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.3),
-                  width: 2,
-                  strokeAlign: BorderSide.strokeAlignInside),
+              color: const Color(0xFF764BA2).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+              border: Border.all(
+                  color: const Color(0xFF764BA2).withValues(alpha: 0.4),
+                  width: 2),
             ),
             child: Row(
               children: [
@@ -360,33 +400,32 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.1),
+                    color: const Color(0xFF764BA2).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(Icons.auto_awesome_rounded,
-                      color: Theme.of(context).colorScheme.primary),
+                  child: const Icon(Icons.auto_awesome_rounded,
+                      color: Color(0xFF9B7FD4)),
                 ),
                 const SizedBox(width: 14),
-                Expanded(
+                const Expanded(
                   child: Text('Create New Group',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurface)),
+                          color: GlassColors.text)),
                 ),
+                const Icon(Icons.chevron_right,
+                    color: GlassColors.textMuted, size: 20),
               ],
             ),
           ),
         ),
         const SizedBox(height: 24),
         if (app.groups.isNotEmpty) ...[
-          Text('Existing Groups',
+          const Text('Existing Groups',
               style: TextStyle(
-                  color: Colors.grey.shade500,
+                  color: GlassColors.textMuted,
                   fontSize: 12,
                   fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
@@ -397,9 +436,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
+                      color: GlassColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(color: GlassColors.border),
                     ),
                     child: Row(
                       children: [
@@ -407,12 +446,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.grey.shade100,
-                                Colors.grey.shade50,
-                              ],
-                            ),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           alignment: Alignment.center,
@@ -423,11 +457,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         Expanded(
                           child: Text(g.name,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 16)),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: GlassColors.text)),
                         ),
                         Text('${g.members.length} members',
-                            style: TextStyle(
-                                color: Colors.grey.shade500, fontSize: 13)),
+                            style: const TextStyle(
+                                color: GlassColors.textMuted, fontSize: 13)),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right,
+                            color: GlassColors.textMuted, size: 20),
                       ],
                     ),
                   ),
@@ -440,14 +479,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Widget _buildCreateGroup() {
     final app = context.read<AppProvider>();
+    final canCreate =
+        _newGroupName.trim().isNotEmpty && _selectedMembers.length >= 2;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
-        // Emoji picker
-        Text('Choose Icon',
+        const Text('Choose Icon',
             style: TextStyle(
-                color: Colors.grey.shade700,
+                color: GlassColors.textMuted,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
@@ -464,13 +504,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 height: 48,
                 decoration: BoxDecoration(
                   color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).cardColor,
+                      ? const Color(0xFF764BA2)
+                      : GlassColors.surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade200,
+                        ? const Color(0xFF764BA2)
+                        : GlassColors.border,
                   ),
                 ),
                 alignment: Alignment.center,
@@ -480,89 +520,112 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           }).toList(),
         ),
         const SizedBox(height: 24),
-        // Group name
         TextField(
-          decoration: const InputDecoration(
-            hintText: 'e.g. Weekend Dinner',
-            labelText: 'Group Name',
+          style: const TextStyle(color: GlassColors.text),
+          decoration: _glassInput(
+            hint: 'e.g. Weekend Dinner',
+            label: 'Group Name',
           ),
           onChanged: (v) => setState(() => _newGroupName = v),
         ),
+        const SizedBox(height: 16),
+        TextField(
+          style: const TextStyle(color: GlassColors.text),
+          minLines: 1,
+          maxLines: 3,
+          decoration: _glassInput(
+            hint: 'What\'s this group for? (optional)',
+            label: 'Description',
+          ),
+          onChanged: (v) => setState(() => _newGroupDescription = v),
+        ),
         const SizedBox(height: 24),
-        // Member lookup by email
         Text('Add Members (${_selectedMembers.length})',
-            style: TextStyle(
-                color: Colors.grey.shade700,
+            style: const TextStyle(
+                color: GlassColors.textMuted,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _memberEmailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  hintText: 'Enter email to add member',
-                  errorText: _memberLookupError,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+        if (app.friends.isNotEmpty) ...[
+          const Text('Pick from your friends',
+              style: TextStyle(
+                  color: GlassColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: app.friends.map((friend) {
+              final picked =
+                  _selectedMembers.any((m) => m.id == friend.id);
+              return GestureDetector(
+                onTap: () => setState(() {
+                  if (picked) {
+                    _selectedMembers = _selectedMembers
+                        .where((m) => m.id != friend.id)
+                        .toList();
+                  } else {
+                    _selectedMembers = [..._selectedMembers, friend];
+                  }
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: picked
+                        ? const Color(0xFF764BA2)
+                        : GlassColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: picked
+                          ? const Color(0xFF764BA2)
+                          : GlassColors.border,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(friend.avatar,
+                          style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(friend.name,
+                          style: TextStyle(
+                            color: picked
+                                ? Colors.white
+                                : GlassColors.text,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          )),
+                      const SizedBox(width: 4),
+                      Icon(
+                        picked
+                            ? Icons.check_rounded
+                            : Icons.add_rounded,
+                        size: 14,
+                        color: picked
+                            ? Colors.white
+                            : GlassColors.textMuted,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              height: 48,
-              child: FilledButton(
-                onPressed: _memberLookupLoading
-                    ? null
-                    : () async {
-                        final email = _memberEmailController.text.trim();
-                        if (email.isEmpty) return;
-                        setState(() {
-                          _memberLookupError = null;
-                          _memberLookupLoading = true;
-                        });
-                        try {
-                          final user =
-                              await ApiService().lookupUserByEmail(email);
-                          if (_selectedMembers.any((m) => m.id == user.id)) {
-                            setState(() {
-                              _memberLookupError = 'Already added.';
-                              _memberLookupLoading = false;
-                            });
-                            return;
-                          }
-                          setState(() {
-                            _selectedMembers = [..._selectedMembers, user];
-                            _memberEmailController.clear();
-                            _memberLookupLoading = false;
-                          });
-                        } catch (e) {
-                          setState(() {
-                            _memberLookupError = e
-                                .toString()
-                                .replaceFirst('Exception: ', '');
-                            _memberLookupLoading = false;
-                          });
-                        }
-                      },
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: _memberLookupLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Add'),
-              ),
-            ),
-          ],
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 14),
+          const Text('Or search anyone',
+              style: TextStyle(
+                  color: GlassColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+        ],
+        UserSearchField(
+          excludeIds: _selectedMembers.map((m) => m.id).toSet(),
+          onUserSelected: (user) =>
+              setState(() => _selectedMembers = [..._selectedMembers, user]),
         ),
         if (_selectedMembers.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -571,19 +634,37 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             runSpacing: 8,
             children: _selectedMembers.map((u) {
               final isSelf = u.id == app.currentUser.id;
-              return Chip(
-                avatar: Text(u.avatar,
-                    style: const TextStyle(fontSize: 14)),
-                label: Text(u.name),
-                deleteIcon: isSelf
-                    ? null
-                    : const Icon(Icons.close, size: 16),
-                onDeleted: isSelf
-                    ? null
-                    : () => setState(() => _selectedMembers =
-                        _selectedMembers
-                            .where((m) => m.id != u.id)
-                            .toList()),
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: GlassColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: GlassColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(u.avatar, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 6),
+                    Text(isSelf ? 'You' : u.name,
+                        style: const TextStyle(
+                            color: GlassColors.text,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500)),
+                    if (!isSelf) ...[
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedMembers =
+                            _selectedMembers
+                                .where((m) => m.id != u.id)
+                                .toList()),
+                        child: const Icon(Icons.close,
+                            size: 14, color: GlassColors.textMuted),
+                      ),
+                    ],
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -592,33 +673,55 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _isCreating = false),
-                style: OutlinedButton.styleFrom(
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    color: GlassColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: GlassColors.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('Cancel',
+                      style: TextStyle(
+                          color: GlassColors.text,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
                 ),
-                child: const Text('Cancel'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: FilledButton(
-                onPressed: _newGroupName.trim().isNotEmpty &&
-                        _selectedMembers.length >= 2
-                    ? _createGroup
-                    : null,
-                style: FilledButton.styleFrom(
+              child: GestureDetector(
+                onTap: canCreate ? _createGroup : null,
+                child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    gradient: canCreate
+                        ? const LinearGradient(
+                            colors: [Color(0xFF764BA2), Color(0xFF667EEA)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: canCreate ? null : GlassColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('Create Group',
+                      style: TextStyle(
+                          color: canCreate
+                              ? Colors.white
+                              : GlassColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
                 ),
-                child: const Text('Create Group'),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -626,7 +729,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Widget _buildStep1() {
     final app = context.watch<AppProvider>();
     final group = app.getGroupById(_selectedGroupId);
-
     final amount = double.tryParse(_amount);
     final canContinue =
         amount != null && amount > 0 && _description.trim().isNotEmpty;
@@ -634,16 +736,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
-        // Selected group info
         if (group != null)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.grey.shade50, Colors.grey.shade100],
-              ),
+              color: GlassColors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: GlassColors.border),
             ),
             child: Row(
               children: [
@@ -651,9 +750,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: GlassColors.border),
                   ),
                   alignment: Alignment.center,
                   child:
@@ -665,49 +764,110 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   children: [
                     Text(group.name,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 15)),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: GlassColors.text)),
                     Text('${group.members.length} members',
-                        style: TextStyle(
-                            color: Colors.grey.shade500, fontSize: 12)),
+                        style: const TextStyle(
+                            color: GlassColors.textMuted, fontSize: 12)),
                   ],
                 ),
               ],
             ),
           ),
-        const SizedBox(height: 24),
-        // Amount
+        const SizedBox(height: 16),
+        // Currency selector chip above the amount field — tap to switch.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: () async {
+              final picked =
+                  await _pickCurrency(context, _currency);
+              if (picked != null) setState(() => _currency = picked);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: GlassColors.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: GlassColors.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${FxService.symbolFor(_currency)} $_currency',
+                    style: const TextStyle(
+                        color: GlassColors.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 16, color: GlassColors.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
         TextField(
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: GlassColors.text),
           textAlign: TextAlign.center,
-          decoration: InputDecoration(
-            hintText: '0.00',
+          decoration: _glassInput(
+            hint: '0.00',
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 16, top: 14),
-              child: Text('RM',
-                  style: TextStyle(
+              child: Text(FxService.symbolFor(_currency),
+                  style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade400)),
+                      color: GlassColors.textMuted)),
             ),
           ),
           onChanged: (v) => setState(() => _amount = v),
         ),
+        // Show a small "≈ in your currency" preview when the expense currency
+        // differs from the viewer's preferred currency.
+        if (_amount.isNotEmpty &&
+            double.tryParse(_amount) != null &&
+            _currency != app.currentUser.currency) ...[
+          const SizedBox(height: 6),
+          Builder(builder: (_) {
+            final native = double.parse(_amount);
+            final converted = FxService().convert(
+                native, _currency, app.currentUser.currency);
+            if (converted == null) return const SizedBox.shrink();
+            return Center(
+              child: Text(
+                '≈ ${FxService().format(converted, app.currentUser.currency)}',
+                style: const TextStyle(
+                    color: GlassColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500),
+              ),
+            );
+          }),
+        ],
         const SizedBox(height: 24),
-        // Description
         TextField(
           focusNode: _descFocus,
-          decoration: const InputDecoration(
-            hintText: 'What was this expense for?',
-            labelText: 'Description',
+          style: const TextStyle(color: GlassColors.text),
+          decoration: _glassInput(
+            hint: 'What was this expense for?',
+            label: 'Description',
           ),
           onChanged: (v) => setState(() => _description = v),
         ),
         const SizedBox(height: 24),
-        // Category
-        Text('Category',
+        const Text('Category',
             style: TextStyle(
-                color: Colors.grey.shade700,
+                color: GlassColors.textMuted,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
@@ -726,26 +886,26 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).cardColor,
+                      ? const Color(0xFF764BA2)
+                      : GlassColors.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade200,
+                        ? const Color(0xFF764BA2)
+                        : GlassColors.border,
                   ),
                 ),
                 child: Column(
                   children: [
-                    Text(config.emoji, style: const TextStyle(fontSize: 22)),
+                    Text(config.emoji,
+                        style: const TextStyle(fontSize: 22)),
                     const SizedBox(height: 4),
                     Text(config.label,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: selected
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : null,
+                          color:
+                              selected ? Colors.white : GlassColors.textMuted,
                         )),
                   ],
                 ),
@@ -754,10 +914,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           }).toList(),
         ),
         const SizedBox(height: 24),
-        // Payer
-        Text('Who paid?',
+        const Text('Who paid?',
             style: TextStyle(
-                color: Colors.grey.shade700,
+                color: GlassColors.textMuted,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
@@ -771,17 +930,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 onTap: () => setState(() => _paidBy = m.id),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).cardColor,
+                        ? const Color(0xFF764BA2)
+                        : GlassColors.surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: selected
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade200,
+                          ? const Color(0xFF764BA2)
+                          : GlassColors.border,
                     ),
                   ),
                   child: Row(
@@ -789,12 +948,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     children: [
                       Text(m.avatar, style: const TextStyle(fontSize: 16)),
                       const SizedBox(width: 6),
-                      Text(m.name,
+                      Text(m.id == app.currentUser.id ? 'You' : m.name,
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
-                            color: selected
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : null,
+                            color: selected ? Colors.white : GlassColors.text,
                           )),
                     ],
                   ),
@@ -803,15 +960,33 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             }).toList(),
           ),
         const SizedBox(height: 32),
-        FilledButton(
-          onPressed: canContinue ? _nextStep : null,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        GestureDetector(
+          onTap: canContinue ? _nextStep : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              gradient: canContinue
+                  ? const LinearGradient(
+                      colors: [Color(0xFF764BA2), Color(0xFF667EEA)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: canContinue ? null : GlassColors.surface,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'Next: Set Split',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: canContinue ? Colors.white : GlassColors.textMuted,
+              ),
+            ),
           ),
-          child: const Text('Next: Set Split', style: TextStyle(fontSize: 16)),
         ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -820,75 +995,74 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final app = context.watch<AppProvider>();
     final group = app.getGroupById(_selectedGroupId);
     final amount = double.tryParse(_amount) ?? 0;
-    final perPerson =
+    final double perPerson =
         _splitBetween.isNotEmpty ? amount / _splitBetween.length : 0;
 
-    // Keep controllers in sync with the current splitBetween + amount.
     if (_splitMode == _SplitMode.exact) {
       _syncExactControllers();
     }
     final remaining = amount - _exactSum;
+    final canSave = amount > 0 &&
+        _paidBy.isNotEmpty &&
+        _splitBetween.isNotEmpty &&
+        (_splitMode == _SplitMode.equal || _exactSumMatches);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       children: [
-        // Summary
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-              ],
-            ),
+            color: const Color(0xFF764BA2).withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+              color: const Color(0xFF764BA2).withValues(alpha: 0.3),
             ),
           ),
           child: Column(
             children: [
-              Text('Total Amount',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              const Text('Total Amount',
+                  style:
+                      TextStyle(color: GlassColors.textMuted, fontSize: 13)),
               const SizedBox(height: 4),
-              Text('RM ${amount.toStringAsFixed(2)}',
+              Text(FxService().format(amount, _currency),
                   style: const TextStyle(
-                      fontSize: 32, fontWeight: FontWeight.bold)),
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: GlassColors.text)),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
+                      color: const Color(0xFF764BA2).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text('${_splitBetween.length} people splitting',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Color(0xFF9B7FD4),
                         )),
                   ),
                   const SizedBox(width: 10),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
+                      color: GlassColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade200),
+                      border: Border.all(color: GlassColors.border),
                     ),
-                    child: Text('Each RM ${perPerson.toStringAsFixed(2)}',
+                    child: Text(
+                        'Each ${FxService().format(perPerson, _currency)}',
                         style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: GlassColors.text)),
                   ),
                 ],
               ),
@@ -896,12 +1070,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        // Split-mode toggle: Equal vs Exact
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: GlassColors.surface,
             borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: GlassColors.border),
           ),
           child: Row(
             children: [
@@ -911,7 +1085,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   selected: _splitMode == _SplitMode.equal,
                   onTap: () => setState(() {
                     _splitMode = _SplitMode.equal;
-                    // discard any partial exact data
                     for (final c in _exactControllers.values) {
                       c.dispose();
                     }
@@ -936,15 +1109,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         if (_splitMode == _SplitMode.exact) ...[
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: _exactSumMatches
-                  ? Colors.green.withValues(alpha: 0.08)
-                  : Colors.orange.withValues(alpha: 0.08),
+                  ? GlassColors.positive.withValues(alpha: 0.1)
+                  : Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _exactSumMatches
-                    ? Colors.green.withValues(alpha: 0.4)
+                    ? GlassColors.positive.withValues(alpha: 0.4)
                     : Colors.orange.withValues(alpha: 0.4),
               ),
             ),
@@ -955,8 +1129,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ? Icons.check_circle_rounded
                       : Icons.error_outline_rounded,
                   size: 18,
-                  color:
-                      _exactSumMatches ? Colors.green.shade700 : Colors.orange.shade800,
+                  color: _exactSumMatches
+                      ? GlassColors.positive
+                      : Colors.orange.shade400,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -964,14 +1139,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     _exactSumMatches
                         ? 'Amounts match total — ready to save.'
                         : remaining > 0
-                            ? 'Remaining: RM ${remaining.toStringAsFixed(2)} unassigned'
-                            : 'Over by RM ${(-remaining).toStringAsFixed(2)}',
+                            ? 'Remaining: ${FxService().format(remaining, _currency)} unassigned'
+                            : 'Over by ${FxService().format(-remaining, _currency)}',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: _exactSumMatches
-                          ? Colors.green.shade800
-                          : Colors.orange.shade900,
+                          ? GlassColors.positive
+                          : Colors.orange.shade400,
                     ),
                   ),
                 ),
@@ -980,9 +1155,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ),
         ],
         const SizedBox(height: 18),
-        Text('Who should split this?',
+        const Text('Who should split this?',
             style: TextStyle(
-                color: Colors.grey.shade700,
+                color: GlassColors.textMuted,
                 fontSize: 14,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 10),
@@ -1006,16 +1181,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: isIncluded
-                        ? Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.05)
-                        : Theme.of(context).cardColor,
+                        ? const Color(0xFF764BA2).withValues(alpha: 0.12)
+                        : GlassColors.surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isIncluded
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade200,
+                          ? const Color(0xFF764BA2).withValues(alpha: 0.5)
+                          : GlassColors.border,
                       width: isIncluded ? 2 : 1,
                     ),
                   ),
@@ -1025,7 +1197,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         alignment: Alignment.center,
@@ -1034,38 +1206,58 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(m.name,
+                        child: Text(m.id == app.currentUser.id ? 'You' : m.name,
                             style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 15)),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color: GlassColors.text)),
                       ),
                       if (isIncluded && _splitMode == _SplitMode.equal)
-                        Text('RM ${perPerson.toStringAsFixed(2)}',
-                            style: TextStyle(
+                        Text(FxService().format(perPerson, _currency),
+                            style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.primary,
+                              color: Color(0xFF9B7FD4),
                             )),
                       if (isIncluded && _splitMode == _SplitMode.exact)
                         SizedBox(
                           width: 90,
                           child: TextField(
                             controller: _exactControllers[m.id],
-                            keyboardType: const TextInputType.numberWithOptions(
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                             textAlign: TextAlign.right,
                             style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w600),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: GlassColors.text),
                             decoration: InputDecoration(
                               isDense: true,
-                              prefixText: 'RM ',
+                              prefixText: '${FxService.symbolFor(_currency)} ',
+                              prefixStyle: const TextStyle(
+                                  color: GlassColors.textMuted,
+                                  fontSize: 13),
                               contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 8),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                    color: GlassColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                    color: GlassColors.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                    color: Colors.white54),
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: GlassColors.surface,
                             ),
                           ),
                         ),
@@ -1077,13 +1269,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: isIncluded
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.grey.shade300,
+                                ? const Color(0xFF764BA2)
+                                : GlassColors.border,
                             width: 2,
                           ),
                           color: isIncluded
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
+                              ? const Color(0xFF764BA2)
+                              : Colors.transparent,
                         ),
                         alignment: Alignment.center,
                         child: isIncluded
@@ -1097,164 +1289,62 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             );
           }),
-        const SizedBox(height: 8),
-        // Add member mid-expense
-        if (!_showMidAddField)
-          GestureDetector(
-            onTap: () => setState(() {
-              _showMidAddField = true;
-              _midMemberLookupError = null;
-              _midMemberEmailController.clear();
-            }),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_add_rounded,
-                      size: 18, color: Colors.grey.shade500),
-                  const SizedBox(width: 8),
-                  Text('Add someone by email',
-                      style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500)),
-                ],
-              ),
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _midMemberEmailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Enter email address',
-                      errorText: _midMemberLookupError,
-                      isDense: true,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 42,
-                  child: FilledButton(
-                    onPressed: _midMemberLookupLoading
-                        ? null
-                        : () async {
-                            final email =
-                                _midMemberEmailController.text.trim();
-                            if (email.isEmpty) return;
-                            setState(() {
-                              _midMemberLookupError = null;
-                              _midMemberLookupLoading = true;
-                            });
-                            final provider = context.read<AppProvider>();
-                            try {
-                              final user =
-                                  await ApiService().lookupUserByEmail(email);
-                              final g = provider.getGroupById(_selectedGroupId);
-                              if (g != null &&
-                                  !g.members.any((m) => m.id == user.id)) {
-                                await provider.addMemberToGroup(
-                                    _selectedGroupId, user.id);
-                              }
-                              setState(() {
-                                if (!_splitBetween.contains(user.id)) {
-                                  _splitBetween.add(user.id);
-                                }
-                                _midMemberEmailController.clear();
-                                _midMemberLookupLoading = false;
-                                _showMidAddField = false;
-                              });
-                            } catch (e) {
-                              setState(() {
-                                _midMemberLookupError = e
-                                    .toString()
-                                    .replaceFirst('Exception: ', '');
-                                _midMemberLookupLoading = false;
-                              });
-                            }
-                          },
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _midMemberLookupLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Add'),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  onPressed: () => setState(() {
-                    _showMidAddField = false;
-                    _midMemberLookupError = null;
-                  }),
-                  icon: Icon(Icons.close_rounded,
-                      size: 20, color: Colors.grey.shade400),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          ),
         const SizedBox(height: 32),
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                onPressed: _prevStep,
-                style: OutlinedButton.styleFrom(
+              child: GestureDetector(
+                onTap: _prevStep,
+                child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    color: GlassColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: GlassColors.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('Back',
+                      style: TextStyle(
+                          color: GlassColors.text,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
                 ),
-                child: const Text('Back'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: FilledButton(
-                onPressed: (amount > 0 &&
-                        _paidBy.isNotEmpty &&
-                        _splitBetween.isNotEmpty &&
-                        (_splitMode == _SplitMode.equal || _exactSumMatches))
-                    ? _submit
-                    : null,
-                style: FilledButton.styleFrom(
+              child: GestureDetector(
+                onTap: canSave ? _submit : null,
+                child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(
+                    gradient: canSave
+                        ? const LinearGradient(
+                            colors: [Color(0xFF764BA2), Color(0xFF667EEA)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: canSave ? null : GlassColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                      widget.expense != null
+                          ? 'Save Changes'
+                          : 'Save Expense',
+                      style: TextStyle(
+                          color: canSave
+                              ? Colors.white
+                              : GlassColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
                 ),
-                child: Text(widget.expense != null ? 'Save Changes' : 'Save Expense'),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -1272,7 +1362,6 @@ class _SplitModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -1281,7 +1370,7 @@ class _SplitModeChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? scheme.primary : Colors.transparent,
+          color: selected ? const Color(0xFF764BA2) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
@@ -1289,7 +1378,7 @@ class _SplitModeChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : Colors.grey.shade700,
+            color: selected ? Colors.white : GlassColors.textMuted,
           ),
         ),
       ),
@@ -1307,12 +1396,97 @@ class _ProgressSegment extends StatelessWidget {
       child: Container(
         height: 4,
         decoration: BoxDecoration(
-          color: filled
-              ? Theme.of(context).colorScheme.primary
-              : Colors.grey.shade200,
+          color: filled ? const Color(0xFF764BA2) : GlassColors.surface,
           borderRadius: BorderRadius.circular(4),
         ),
       ),
     );
   }
+}
+
+
+Future<String?> _pickCurrency(BuildContext context, String current) {
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF1A1535),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetCtx) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text("Select currency",
+                  style: TextStyle(
+                      color: GlassColors.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: FxService.supportedCurrencies.map((code) {
+                    final picked = code == current;
+                    return InkWell(
+                      onTap: () => Navigator.pop(sheetCtx, code),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                        margin: const EdgeInsets.only(bottom: 6),
+                        decoration: BoxDecoration(
+                          color: picked
+                              ? const Color(0xFF764BA2).withValues(alpha: 0.2)
+                              : GlassColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: picked
+                                  ? const Color(0xFF764BA2)
+                                  : GlassColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              child: Text(FxService.symbolFor(code),
+                                  style: const TextStyle(
+                                      color: GlassColors.text,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16)),
+                            ),
+                            Expanded(
+                              child: Text(code,
+                                  style: const TextStyle(
+                                      color: GlassColors.text,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14)),
+                            ),
+                            if (picked)
+                              const Icon(Icons.check_circle_rounded,
+                                  color: Color(0xFF9B7FD4), size: 20),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
