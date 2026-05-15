@@ -13,6 +13,7 @@ const userRoutes = require("./routes/userRoutes");
 const groupRoutes = require("./routes/groupRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
+const friendshipRoutes = require("./routes/friendshipRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 // Create the Express application instance
@@ -35,6 +36,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/summary", summaryRoutes);
+app.use("/api/friends", friendshipRoutes);
 
 // 404 handler — runs when no route matches the request URL
 app.use(notFound);
