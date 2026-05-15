@@ -1,13 +1,12 @@
 const { createClient } = require("@supabase/supabase-js");
+const ws = require("ws");
 const { supabaseUrl, supabaseSecretKey } = require("./env");
 
 if (!supabaseUrl || !supabaseSecretKey) {
     throw new Error("Missing SUPABASE_URL or SUPABASE_SECRET_KEY in .env");
 }
-// create supabase client with env variables
-const supabase = createClient(
-    supabaseUrl,
-    supabaseSecretKey
-);
+const supabase = createClient(supabaseUrl, supabaseSecretKey, {
+    realtime: { transport: ws },
+});
 
 module.exports = supabase;
