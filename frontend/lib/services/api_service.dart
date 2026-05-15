@@ -42,13 +42,11 @@ class ApiService {
   static const String _baseUrlOverride =
       String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
+  static const String _productionUrl = 'https://splitease-backend-wk79.onrender.com/api';
+
   String get _baseUrl {
     if (_baseUrlOverride.isNotEmpty) return _baseUrlOverride;
-    if (kIsWeb) {
-      // Use whatever host served the page — localhost, 127.0.0.1, or LAN IP all work.
-      final host = _webHost();
-      return 'http://$host:5001/api';
-    }
+    if (kIsWeb) return _productionUrl;
     if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';  // Android emulator
     return 'http://localhost:5001/api';  // iOS simulator / desktop
   }
