@@ -1,47 +1,55 @@
-# Expense Splitter
+# SplitEase
 
-Expense Splitter is now structured as two apps:
+A mobile-friendly expense splitting app built with Flutter + Node.js + Supabase.
 
-```text
-backend/   Node.js + Express API
-frontend/  Flutter app
-```
+---
 
-The old React and Next.js implementation has been removed.
+## Prerequisites
 
-## First-time setup
+- [Node.js 20+](https://nodejs.org)
+- [Flutter 3+](https://flutter.dev/docs/get-started/install)
+- A [Supabase](https://supabase.com) project
+- A [Brevo](https://brevo.com) account (for email verification)
 
-1. Copy the env template and fill in your Supabase credentials:
-   ```bash
-   cp backend/.env.example backend/.env
-   ```
-   Set `SUPABASE_URL` and `SUPABASE_SECRET_KEY` from your Supabase dashboard (Project Settings -> API).
-2. Apply the database schema. Either:
-   - run `npm --prefix backend run migrate` (requires `DATABASE_URL` in `backend/.env`), **or**
-   - open `backend/src/db/migrations/001_initial_schema.sql` and paste it into the Supabase SQL Editor.
+---
 
-## Backend
+## 1. Database Setup
+
+1. Open your Supabase project → **SQL Editor**
+2. Run `backend/src/db/migrations/001_initial_schema.sql`
+3. Run `backend/src/db/migrations/002_split_amounts.sql`
+
+---
+
+## 2. Backend Setup
 
 ```bash
 cd backend
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-The API listens on `http://localhost:5001` by default (override with `PORT` in `backend/.env`).
+Fill in `backend/.env`:
 
-Available routes:
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SECRET_KEY=your-service-role-key
+JWT_SECRET=any-random-secret-string
+BREVO_API_KEY=your-brevo-api-key
+APP_BASE_URL=http://localhost:5001
+PORT=5001
+```
 
-- `GET /health`
-- `GET /api/app-state`
-- `POST /api/users`
-- `POST /api/groups`
-- `POST /api/expenses`
-- `DELETE /api/expenses?groupId=...&expenseId=...`
+- `SUPABASE_URL` and `SUPABASE_SECRET_KEY` → Supabase dashboard → Project Settings → API
+- `BREVO_API_KEY` → Brevo dashboard → SMTP & API → API Keys
+- `APP_BASE_URL` → the public URL of your backend (use `http://localhost:5001` for local dev)
 
-Data is persisted in Supabase Postgres via the tables and `sync_full_database` stored procedure created by the migration above.
+The API will be running at `http://localhost:5001`.
 
-## Frontend
+---
+
+## 3. Frontend Setup
 
 ```bash
 cd frontend
@@ -49,46 +57,44 @@ flutter pub get
 flutter run
 ```
 
-The API base URL is resolved automatically per platform (localhost on iOS/desktop, `10.0.2.2` on the Android emulator). To override it at build time:
+To point the app at a specific backend URL:
 
 ```bash
-# Full override (use any reachable backend)
 flutter run --dart-define=API_BASE_URL=http://localhost:5001/api
-
-# Or just the LAN IP, for testing the web build from a phone on the same network
-flutter run --dart-define=API_HOST_IP=192.168.1.42
 ```
 
-For web, choose a browser target when prompted by Flutter.
-
-## Docker (backend only)
+For web:
 
 ```bash
-docker compose up --build
+flutter build web
+# Output is in frontend/build/web/
 ```
 
-The compose file builds `backend/Dockerfile` and reads secrets from `backend/.env`. The Flutter frontend is not containerized — it builds for mobile/desktop/web targets directly via the `flutter` CLI.
+---
 
-## CI
+## 4. Cloud Deployment
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push and PR to `main`:
+### Backend → Render
 
-- **Backend** — `npm ci`, `npm run check`, `npm test`
-- **Frontend** — `flutter pub get`, `flutter analyze`, `flutter test`
+1. Push your repo to GitHub
+2. Go to [render.com](https://render.com) → New → Web Service
+3. Connect your repo, set **Root Directory** to `backend`, **Environment** to `Docker`
+4. Add all environment variables from `.env` (use your Render URL for `APP_BASE_URL`)
 
-## Checks
+### Frontend → Netlify
 
-From the repo root:
+1. Update `API_BASE_URL` in the Flutter app to your Render backend URL
+2. Run `flutter build web`
+3. Drag the `frontend/build/web/` folder to [netlify.com](https://netlify.com)
+
+---
+
+## 5. Running Tests
 
 ```bash
-npm run check
-```
-
-Or run them separately:
-
-```bash
-npm --prefix backend run check
+# Backend
 npm --prefix backend test
-cd frontend && flutter analyze
+
+# Frontend
 cd frontend && flutter test
 ```
