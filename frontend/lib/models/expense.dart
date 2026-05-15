@@ -17,6 +17,9 @@ class Expense {
   final ExpenseCategory category;
   final String date;
   final String groupId;
+  // ISO 4217 currency code the amount was entered in (e.g. 'EUR'). Display
+  // code converts to viewer's preferred currency at render time.
+  final String currency;
 
   const Expense({
     required this.id,
@@ -28,6 +31,7 @@ class Expense {
     required this.category,
     required this.date,
     required this.groupId,
+    this.currency = 'MYR',
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
@@ -54,6 +58,7 @@ class Expense {
           CategoryConfig.fromString(json['category'] as String? ?? 'other'),
       date: json['date'] as String,
       groupId: json['groupId'] as String? ?? json['group_id'] as String,
+      currency: (json['currency'] as String?) ?? 'MYR',
     );
   }
 
@@ -67,6 +72,7 @@ class Expense {
         'category': category.name,
         'date': date,
         'groupId': groupId,
+        'currency': currency,
       };
 
   // Per-user share of this expense.

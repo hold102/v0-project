@@ -10,7 +10,7 @@
 const { createId } = require("./idService");
 const { readDb, updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
-const { normalizeText } = require("../utils/normalize");
+const { normalizeEmail, normalizeText } = require("../utils/normalize");
 
 async function createOrReuseUser(body) {
   if (!body || typeof body.name !== "string" || !body.name.trim()) {
@@ -59,7 +59,22 @@ function publicUser(user) {
     name: user.name,
     avatar: user.avatar,
     email: user.email,
+    currency: user.currency || 'MYR',
   };
+}
+
+// Update the current user's preferred display currency.
+async function updateUserCurrency(userId, currency) {
+  if (typeof currency !== 'string' || !currency.trim()) {
+    throw new RequestError('Currency code is required.');
+  }
+  const code = currency.trim().toUpperCase();
+  return updateDb((db) => {
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) throw new RequestError('User not found.', 404);
+    user.currency = code;
+    return publicUser(user);
+  });
 }
 
 async function listUsers() {
@@ -87,8 +102,9 @@ async function getUserByEmail(email) {
   }
 
   const db = await readDb();
+  const normalized = normalizeEmail(email);
   const user = db.users.find(
-    (u) => u.email && u.email.toLocaleLowerCase() === email.trim().toLocaleLowerCase()
+    (u) => u.email && normalizeEmail(u.email) === normalized
   );
   if (!user) {
     throw new RequestError("No user found with that email.", 404);
@@ -97,10 +113,25 @@ async function getUserByEmail(email) {
   return publicUser(user);
 }
 
+async function searchUsers(query) {
+  if (typeof query !== "string" || !query.trim()) return [];
+  const q = query.trim().toLocaleLowerCase();
+  const db = await readDb();
+  return db.users
+    .filter((u) => {
+      const nameMatch = u.name.toLocaleLowerCase().includes(q);
+      const emailMatch = u.email && u.email.toLocaleLowerCase().includes(q);
+      return nameMatch || emailMatch;
+    })
+    .map(publicUser);
+}
+
 module.exports = {
   createOrReuseUser,
   getUserById,
   getUserByEmail,
+  searchUsers,
   listUsers,
   publicUser,
+  updateUserCurrency,
 };

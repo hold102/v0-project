@@ -159,6 +159,8 @@ function normalizeCreateExpense(body, groupIdFromParams) {
     throw new RequestError("Expense category is invalid.");
   }
 
+  const currency = (normalizeText(source.currency) || 'MYR').toUpperCase();
+
   return {
     id: normalizeOptionalId(source.id || body.id, "Expense id"),
     groupId,
@@ -169,6 +171,7 @@ function normalizeCreateExpense(body, groupIdFromParams) {
     splitAmounts,
     category,
     date: normalizeText(source.date) || todayIsoDate(),
+    currency,
   };
 }
 
@@ -212,6 +215,11 @@ function normalizeUpdateExpense(body) {
       throw new RequestError("Expense category is invalid.");
     }
     updates.category = category;
+  }
+
+  if (source.currency !== undefined) {
+    const currency = (normalizeText(source.currency) || 'MYR').toUpperCase();
+    updates.currency = currency;
   }
 
   if (source.date !== undefined) {
@@ -305,6 +313,7 @@ async function createExpense(body, options = {}) {
       category: expenseData.category,
       date: expenseData.date,
       groupId: group.id,
+      currency: expenseData.currency || 'MYR',
     };
 
     if (group.expenses.some((item) => item.id === expense.id)) {
@@ -404,6 +413,7 @@ async function recordSettlement(body, groupId) {
       category: "settlement",
       date,
       groupId: gid,
+      currency: 'MYR',
     };
 
     group.expenses.push(expense);

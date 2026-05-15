@@ -62,6 +62,7 @@ function expenseToMemory(row, splitBetween, splitAmounts) {
     category: row.category,
     date: row.date,
     groupId: row.group_id,
+    currency: row.currency || 'MYR',
   };
   if (splitAmounts && Object.keys(splitAmounts).length > 0) {
     expense.splitAmounts = splitAmounts;
@@ -100,12 +101,12 @@ async function readDb() {
     { data: splitMembers, error: smErr },
     { data: settlements, error: settlementsErr },
   ] = await Promise.all([
-    supabase.from("users").select("id, name, avatar, email"),
+    supabase.from("users").select("id, name, avatar, email, currency"),
     supabase.from("accounts").select("user_id, email, password_hash, salt, created_at"),
     supabase.from("app_state").select("current_user_id").limit(1),
-    supabase.from("groups_table").select("id, name, emoji, created_at"),
+    supabase.from("groups_table").select("id, name, emoji, description, created_at"),
     supabase.from("group_members").select("group_id, user_id"),
-    supabase.from("expenses").select("id, description, amount, paid_by, category, date, group_id"),
+    supabase.from("expenses").select("id, description, amount, paid_by, category, date, group_id, currency"),
     supabase.from("expense_split_members").select(splitMembersSelect),
     supabase.from("settlements").select("id, group_id, from_user, to_user, amount, date"),
   ]);
@@ -128,7 +129,7 @@ async function readDb() {
   }
 
   // Build lookup maps
-  const userMap = new Map(users.map((u) => [u.id, { id: u.id, name: u.name, avatar: u.avatar, email: u.email || undefined }]));
+  const userMap = new Map(users.map((u) => [u.id, { id: u.id, name: u.name, avatar: u.avatar, email: u.email || undefined, currency: u.currency || 'MYR' }]));
 
   // Group members: Map<groupId, userId[]>
   const memberMap = new Map();
@@ -181,6 +182,7 @@ async function readDb() {
       id: g.id,
       name: g.name,
       emoji: g.emoji,
+      description: g.description || '',
       members,
       expenses: expenseMap.get(g.id) || [],
       settlements: settlementMap.get(g.id) || [],
@@ -192,7 +194,7 @@ async function readDb() {
 
   const db = {
     currentUserId,
-    users: users.map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, email: u.email || undefined })),
+    users: users.map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, email: u.email || undefined, currency: u.currency || 'MYR' })),
     groups,
     accounts: (accounts || []).map(accountToMemory),
   };

@@ -8,8 +8,12 @@ const {
   createOrReuseUser,
   getUserById: getUserByIdService,
   getUserByEmail: getUserByEmailService,
+  searchUsers: searchUsersService,
   listUsers: listUsersService,
+  updateUserCurrency,
 } = require("../services/userService");
+const { readDb } = require("../services/supabaseService");
+const { RequestError } = require("../models/requestError");
 
 async function listUsers(_req, res, next) {
   try {
@@ -47,9 +51,31 @@ async function lookupByEmail(req, res, next) {
   }
 }
 
+async function searchUsers(req, res, next) {
+  try {
+    const users = await searchUsersService(req.query.q || "");
+    res.json(users);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function setMyCurrency(req, res, next) {
+  try {
+    const db = await readDb();
+    if (!db.currentUserId) throw new RequestError('Not signed in.', 401);
+    const updated = await updateUserCurrency(db.currentUserId, req.body?.currency);
+    res.json(updated);
+  } catch (e) {
+    next(e);
+  }
+}
+
 module.exports = {
   createUser,
   getUserById,
   listUsers,
   lookupByEmail,
+  searchUsers,
+  setMyCurrency,
 };

@@ -9,11 +9,14 @@
  * until the check completes so the user never sees a flash of the auth screen
  * when they have a valid persisted session.
  */
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:splitease/providers/app_provider.dart';
 import 'package:splitease/main_scaffold.dart';
 import 'package:splitease/screens/auth_screen.dart';
+import 'package:splitease/services/fx_service.dart';
 
 void main() async {
   // Required for async operations before runApp (e.g., plugin init)
@@ -21,6 +24,9 @@ void main() async {
 
   // Create the provider and restore any persisted session before rendering
   final appProvider = AppProvider();
+  // Kick off FX rates fetch in parallel with session restore — best-effort,
+  // app keeps working with hardcoded fallback rates if the call fails.
+  unawaited(FxService().ensureLoaded());
   await appProvider.restoreSession();
 
   runApp(

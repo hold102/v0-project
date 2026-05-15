@@ -6,12 +6,14 @@
  * POST /            — create a new user (or return an existing one with the same name/email)
  */
 const express = require("express");
-const { createUser, getUserById, listUsers, lookupByEmail } = require("../controllers/userController");
+const { createUser, getUserById, listUsers, lookupByEmail, searchUsers, setMyCurrency } = require("../controllers/userController");
 
 const router = express.Router();
 
 router.get("/", listUsers);
 router.get("/lookup", lookupByEmail);
+router.get("/search", searchUsers);
+router.put("/me/currency", setMyCurrency);
 router.get("/:id", getUserById);
 router.post("/", createUser);
 
