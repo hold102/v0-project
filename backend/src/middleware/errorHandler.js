@@ -21,10 +21,9 @@ function errorHandler(error, _req, res, _next) {
     console.error(error);  // Log server errors for debugging
   }
 
-  return res.status(status).json({
-    // Only expose the error message for client errors (4xx), not server errors (5xx)
-    error: status >= 500 ? "Internal server error." : error.message,
-  });
+  const body = { error: status >= 500 ? "Internal server error." : error.message };
+  if (error.code) body.code = error.code;
+  return res.status(status).json(body);
 }
 
 module.exports = {

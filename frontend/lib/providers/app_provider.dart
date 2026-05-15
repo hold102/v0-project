@@ -42,17 +42,49 @@ class AppProvider extends ChangeNotifier {
   bool _authLoading = false;                         // true while login/register is in progress
   bool _sessionRestored = false;                     // true once the persisted session check is done
   String? _authError;                                // error message from last auth attempt
+  String? _authErrorCode;                            // machine-readable code (e.g. EMAIL_NOT_VERIFIED)
   String? _lastSyncError;                            // last backend write that failed, for UI banners
+  String? _pendingVerificationEmail;                 // set after register until user verifies
+
+  // Friendship state
+  Map<String, String> _friendStatuses = {};           // userId -> 'friend' | 'outgoing' | 'incoming'
+  List<User> _incomingRequests = const [];
+  List<User> _friends = const [];
 
   bool get loading => _loading;
   bool get authLoading => _authLoading;
   bool get sessionRestored => _sessionRestored;
   String? get authError => _authError;
+  String? get authErrorCode => _authErrorCode;
   String? get lastSyncError => _lastSyncError;
+  String? get pendingVerificationEmail => _pendingVerificationEmail;
+  Map<String, String> get friendStatuses => _friendStatuses;
+  List<User> get incomingRequests => _incomingRequests;
+  List<User> get friends => _friends;
+  String friendStatusFor(String userId) =>
+      userId == _currentUser?.id ? 'self' : (_friendStatuses[userId] ?? 'none');
+
+  // Display the current user as "You" in lists, expenses, balances etc.
+  // Profile header still shows the real name — it's the user's own profile.
+  String displayName(User user) =>
+      user.id == _currentUser?.id ? 'You' : user.name;
+  String displayNameById(String? userId, {String fallback = '?'}) {
+    if (userId == null) return fallback;
+    if (userId == _currentUser?.id) return 'You';
+    final u = users.where((x) => x.id == userId).toList();
+    return u.isEmpty ? fallback : u.first.name;
+  }
   DataSource get dataSource => _dataSource;
   bool get isUsingMockData => _dataSource == DataSource.mock;
   bool get isAuthenticated => _currentUser != null;
   User get currentUser => _currentUser ?? users.first;
+
+  void clearPendingVerification() {
+    _pendingVerificationEmail = null;
+    _authError = null;
+    _authErrorCode = null;
+    notifyListeners();
+  }
 
   void clearSyncError() {
     if (_lastSyncError == null) return;
@@ -71,6 +103,7 @@ class AppProvider extends ChangeNotifier {
         users = _upsertUser(users, user);
         await loadData();
         users = _upsertUser(users, user);
+        await loadFriendData(); // also rehydrate the friend graph on cold start
       }
     } catch (_) {
       await _clearPersistedSession();
@@ -127,6 +160,8 @@ class AppProvider extends ChangeNotifier {
         _dataSource = DataSource.api;
         _loading = false;
         notifyListeners();
+        // Refresh friend graph too — fire and forget so we don't block loadData.
+        if (_currentUser != null) loadFriendData();
         return;
       }
     } catch (e, s) {
@@ -177,6 +212,13 @@ class AppProvider extends ChangeNotifier {
       return true;
     } catch (error) {
       _authError = _authMessage(error, 'Unable to sign in.');
+      _authErrorCode = error is ApiException
+          ? _extractCode(error)
+          : null;
+      // If unverified, surface the email so the auth screen can show resend option
+      if (_authErrorCode == 'EMAIL_NOT_VERIFIED') {
+        _pendingVerificationEmail = email;
+      }
       _setAuthLoading(false);
       return false;
     }
@@ -190,30 +232,114 @@ class AppProvider extends ChangeNotifier {
     _setAuthLoading(true);
 
     try {
-      final user = await ApiService().register(
+      final result = await ApiService().register(
         name: name,
         email: email,
         password: password,
       );
-      await _completeAuth(user);
-      return true;
-    } catch (error) {
-      if (error is! ApiException) {
-        final localUser = User(
-          id: 'u${DateTime.now().millisecondsSinceEpoch}',
-          name: name.trim(),
-          avatar: '👤',
-          email: email.trim(),
-        );
-        await _completeAuth(localUser);
+      if (result.requiresVerification) {
+        _pendingVerificationEmail = email;
+        _authError = null;
+        _authErrorCode = null;
+        _authLoading = false;
+        notifyListeners();
         return true;
       }
-
+      await _completeAuth(result.user);
+      return true;
+    } catch (error) {
       _authError = _authMessage(error, 'Unable to create account.');
+      _authErrorCode = null;
       _setAuthLoading(false);
       return false;
     }
   }
+
+  // Loads friend list, incoming requests, and a status map for the current user.
+  // Best-effort: if any call fails (e.g. not signed in yet) we just leave state empty.
+  Future<void> loadFriendData() async {
+    if (_currentUser == null) return;
+    try {
+      final results = await Future.wait([
+        ApiService().getFriendStatuses(),
+        ApiService().getIncomingRequests(),
+        ApiService().getFriends(),
+      ]);
+      _friendStatuses = results[0] as Map<String, String>;
+      _incomingRequests = results[1] as List<User>;
+      _friends = results[2] as List<User>;
+      notifyListeners();
+    } catch (e, s) {
+      developer.log('loadFriendData failed',
+          error: e, stackTrace: s, name: 'AppProvider');
+    }
+  }
+
+  Future<bool> sendFriendRequest(String userId) async {
+    try {
+      final status = await ApiService().sendFriendRequest(userId);
+      _friendStatuses = {..._friendStatuses, userId: status == 'accepted' ? 'friend' : 'outgoing'};
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _lastSyncError = e is ApiException ? e.message : 'Friend request failed.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> acceptFriendRequest(String userId) async {
+    try {
+      await ApiService().acceptFriendRequest(userId);
+      _friendStatuses = {..._friendStatuses, userId: 'friend'};
+      _incomingRequests = _incomingRequests.where((u) => u.id != userId).toList();
+      // Refresh friends list to include the new one
+      await loadFriendData();
+      return true;
+    } catch (e) {
+      _lastSyncError = e is ApiException ? e.message : 'Accept failed.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> rejectFriendRequest(String userId) async {
+    try {
+      await ApiService().rejectFriendRequest(userId);
+      final newStatuses = Map<String, String>.from(_friendStatuses)..remove(userId);
+      _friendStatuses = newStatuses;
+      _incomingRequests = _incomingRequests.where((u) => u.id != userId).toList();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _lastSyncError = e is ApiException ? e.message : 'Reject failed.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateMyCurrency(String currency) async {
+    try {
+      final updated = await ApiService().updateMyCurrency(currency);
+      _currentUser = updated;
+      users = _upsertUser(users, updated);
+      await _persistSession(updated);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _lastSyncError = e is ApiException ? e.message : 'Could not update currency.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> resendVerification(String email) async {
+    try {
+      await ApiService().resendVerification(email);
+    } catch (_) {}
+  }
+
+  String? _extractCode(ApiException error) => error.code;
 
   // Post-login/register: set the current user, persist the session, reload data
   Future<void> _completeAuth(User user) async {
@@ -223,6 +349,7 @@ class AppProvider extends ChangeNotifier {
     await _persistSession(user);        // Save to SharedPreferences / localStorage
     await loadData();                   // Fetch fresh data from API/cache
     users = _upsertUser(users, user);  // Re-upsert after data reload (loadData may replace users)
+    await loadFriendData();             // Fetch friend graph for this user
     _authLoading = false;
     notifyListeners();
   }
@@ -230,6 +357,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> logout() async {
     _currentUser = null;
     _authError = null;
+    _friendStatuses = {};
+    _incomingRequests = const [];
+    _friends = const [];
     await _clearPersistedSession();    // Remove from SharedPreferences / localStorage
     notifyListeners();
   }
@@ -237,6 +367,7 @@ class AppProvider extends ChangeNotifier {
   void _setAuthLoading(bool value) {
     _authLoading = value;
     _authError = null;
+    _authErrorCode = null;
     notifyListeners();
   }
 
@@ -285,7 +416,8 @@ class AppProvider extends ChangeNotifier {
   // Optimistic add: update UI immediately, sync to backend in background.
   // The current user is auto-included in the member list — the backend requires
   // the logged-in user to be a member of any group they create.
-  Group addGroup(String name, String emoji, List<User> members) {
+  Group addGroup(String name, String emoji, List<User> members,
+      {String description = ''}) {
     final me = currentUser;
     final dedupedMembers = [
       me,
@@ -296,6 +428,7 @@ class AppProvider extends ChangeNotifier {
       id: 'g${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       emoji: emoji,
+      description: description,
       members: dedupedMembers,
       expenses: [],
       createdAt: DateTime.now().toIso8601String().split('T')[0],
@@ -307,7 +440,7 @@ class AppProvider extends ChangeNotifier {
     // via lastSyncError so the UI can show a banner / snackbar.
     ApiService()
         .createGroup(name, emoji, dedupedMembers.map((m) => m.id).toList(),
-            id: newGroup.id)
+            id: newGroup.id, description: description)
         .then((_) {
       _cacheToLocalDb(users, groups);
     }).catchError((Object e, StackTrace s) {
@@ -325,6 +458,7 @@ class AppProvider extends ChangeNotifier {
     String groupId, {
     String? name,
     String? emoji,
+    String? description,
     List<User>? members,
   }) {
     final me = currentUser;
@@ -340,6 +474,7 @@ class AppProvider extends ChangeNotifier {
         id: g.id,
         name: name ?? g.name,
         emoji: emoji ?? g.emoji,
+        description: description ?? g.description,
         members: dedupedMembers ?? g.members,
         expenses: g.expenses,
         createdAt: g.createdAt,
@@ -352,6 +487,7 @@ class AppProvider extends ChangeNotifier {
           groupId: groupId,
           name: name,
           emoji: emoji,
+          description: description,
           memberIds: dedupedMembers?.map((m) => m.id).toList(),
         )
         .then((_) {
@@ -395,6 +531,7 @@ class AppProvider extends ChangeNotifier {
           id: g.id,
           name: g.name,
           emoji: g.emoji,
+          description: g.description,
           members: g.members,
           expenses: [...g.expenses, expense],
           createdAt: g.createdAt,
@@ -416,6 +553,7 @@ class AppProvider extends ChangeNotifier {
           category: expense.category.name,
           date: expense.date,
           id: expense.id,
+          currency: expense.currency,
         )
         .then((_) {
       _cacheToLocalDb(users, groups);
@@ -429,6 +567,7 @@ class AppProvider extends ChangeNotifier {
           id: g.id,
           name: g.name,
           emoji: g.emoji,
+          description: g.description,
           members: g.members,
           expenses: g.expenses.where((e) => e.id != expense.id).toList(),
           createdAt: g.createdAt,
@@ -447,6 +586,7 @@ class AppProvider extends ChangeNotifier {
           id: g.id,
           name: g.name,
           emoji: g.emoji,
+          description: g.description,
           members: g.members,
           expenses: g.expenses
               .map((existing) => existing.id == expense.id ? expense : existing)
@@ -468,6 +608,7 @@ class AppProvider extends ChangeNotifier {
           splitBetween: expense.splitBetween,
           category: expense.category.name,
           date: expense.date,
+          currency: expense.currency,
         )
         .then((_) {
       _cacheToLocalDb(users, groups);
@@ -486,6 +627,7 @@ class AppProvider extends ChangeNotifier {
           id: g.id,
           name: g.name,
           emoji: g.emoji,
+          description: g.description,
           members: g.members,
           expenses: g.expenses.where((e) => e.id != expenseId).toList(),
           createdAt: g.createdAt,
@@ -596,6 +738,7 @@ class AppProvider extends ChangeNotifier {
         id: g.id,
         name: g.name,
         emoji: g.emoji,
+        description: g.description,
         members: g.members,
         expenses: [...g.expenses, settlementExpense],
         createdAt: g.createdAt,
@@ -641,9 +784,12 @@ class AppProvider extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> getRecentActivity() {
+    // Show at most 5 non-settlement expenses dated today.
+    final today = DateTime.now().toIso8601String().split('T')[0];
     final all = <Map<String, dynamic>>[];
     for (final g in groups) {
-      for (final e in g.expenses.where((e) => e.category != ExpenseCategory.settlement)) {
+      for (final e in g.expenses.where((e) =>
+          e.category != ExpenseCategory.settlement && e.date == today)) {
         all.add({
           'expense': e,
           'groupName': g.name,

@@ -6,11 +6,11 @@
  * Example: throw new RequestError("User not found.", 404);
  */
 class RequestError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, code) {
     super(message);
     this.name = "RequestError";
-    // Default to 400 (Bad Request) for validation-type errors
     this.statusCode = statusCode || 400;
+    this.code = code || null;  // machine-readable code for client error handling
   }
 }
 

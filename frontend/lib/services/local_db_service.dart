@@ -7,6 +7,7 @@
  * users, groups_table, group_members, expenses, expense_splits,
  * expense_split_amounts.
  */
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:splitease/models/user.dart';
@@ -21,15 +22,17 @@ class LocalDbService {
 
   Database? _db;
 
-  // Lazy-init: the database is opened once on first access, then reused
+  // sqflite is not supported on web — all methods no-op when running in a browser
+  bool get _isSupported => !kIsWeb;
+
   Future<Database> get database async {
     if (_db != null) return _db!;
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       join(dbPath, 'splitease.db'),
-      version: 2,
-      onCreate: _onCreate,    // Only runs when the DB file is created for the first time
-      onUpgrade: _onUpgrade,  // Runs when an existing DB needs to migrate to a newer version
+      version: 3,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
     return _db!;
   }
@@ -43,7 +46,8 @@ class LocalDbService {
     ''');
     await db.execute('''
       CREATE TABLE groups_table (
-        id TEXT PRIMARY KEY, name TEXT NOT NULL, emoji TEXT NOT NULL, created_at TEXT NOT NULL
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, emoji TEXT NOT NULL,
+        description TEXT, created_at TEXT NOT NULL
       )
     ''');
     await db.execute('''
@@ -73,6 +77,9 @@ class LocalDbService {
     if (oldVersion < 2) {
       await _createSplitAmountsTable(db);
     }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE groups_table ADD COLUMN description TEXT');
+    }
   }
 
   // Extracted so both onCreate and onUpgrade can call it without duplication.
@@ -88,12 +95,14 @@ class LocalDbService {
   }
 
   Future<void> insertUser(User user) async {
+    if (!_isSupported) return;
     final db = await database;
     await db.insert('users', user.toJson(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> insertUsers(List<User> users) async {
+    if (!_isSupported) return;
     final db = await database;
     final batch = db.batch();
     for (final u in users) {
@@ -104,6 +113,7 @@ class LocalDbService {
   }
 
   Future<List<User>> getAllUsers() async {
+    if (!_isSupported) return [];
     final db = await database;
     final rows = await db.query('users');
     return rows.map((r) => User.fromJson(r)).toList();
@@ -111,6 +121,7 @@ class LocalDbService {
 
   // Insert a group with all related data (members, expenses, splits) in a single transaction
   Future<void> insertGroup(Group group) async {
+    if (!_isSupported) return;
     final db = await database;
     await db.transaction((txn) async {  // All-or-nothing: if any insert fails, everything rolls back
       await txn.insert(
@@ -119,6 +130,7 @@ class LocalDbService {
           'id': group.id,
           'name': group.name,
           'emoji': group.emoji,
+          'description': group.description,
           'created_at': group.createdAt,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
@@ -166,6 +178,7 @@ class LocalDbService {
   }
 
   Future<List<Group>> getAllGroups() async {
+    if (!_isSupported) return [];
     final db = await database;
     final groupRows =
         await db.query('groups_table', orderBy: 'created_at DESC');
@@ -211,6 +224,7 @@ class LocalDbService {
         id: gId,
         name: gRow['name'] as String,
         emoji: gRow['emoji'] as String,
+        description: (gRow['description'] as String?) ?? '',
         createdAt: gRow['created_at'] as String,
         members: members,
         expenses: expenses,
@@ -221,6 +235,7 @@ class LocalDbService {
 
   // Wipe all cached data before re-caching fresh data from the API
   Future<void> clearAll() async {
+    if (!_isSupported) return;
     final db = await database;
     // Delete child tables first to avoid foreign-key issues (if FK enforcement is enabled)
     await db.delete('expense_split_amounts');

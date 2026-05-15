@@ -22,6 +22,8 @@ const { updateDb } = require("./supabaseService");
 const { RequestError } = require("../models/requestError");
 const { normalizeEmail, normalizeText } = require("../utils/normalize");
 const { publicUser } = require("./userService");
+const { createVerificationToken, isVerified } = require("./verificationService");
+const { sendVerificationEmail } = require("./emailService");
 
 function validateEmail(email) {
   if (!email || !email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
@@ -48,6 +50,7 @@ function verifyPassword(password, account) {
 }
 
 async function register(body) {
+  console.log("[authService] register called with email:", body?.email);
   const name = normalizeText(body?.name);
   const email = normalizeEmail(body?.email);
   const avatar = normalizeText(body?.avatar) || "👤";
@@ -59,7 +62,7 @@ async function register(body) {
   validateEmail(email);
   validatePassword(password);
 
-  return updateDb((db) => {
+  const result = await updateDb((db) => {
     db.accounts = db.accounts || [];
 
     // Prevent duplicate accounts
@@ -80,6 +83,7 @@ async function register(body) {
         name,
         avatar,
         email,
+        currency: 'MYR',
       };
       db.users.push(user);
     } else {
@@ -98,10 +102,21 @@ async function register(body) {
       salt,
       createdAt: todayIsoDate(),
     });
-    db.currentUserId = user.id;  // Auto-login after registration
-
-    return { user: publicUser(user) };
+    // Don't auto-login — user must verify email first
+    return { user: publicUser(user), userId: user.id };
   });
+
+  // Send verification email outside updateDb (async external call)
+  console.log("[authService] updateDb done, sending verification email to:", result?.userId);
+  let token;
+  try {
+    token = await createVerificationToken(result.userId);
+    await sendVerificationEmail(result.user.email, result.user.name, token);
+  } catch (emailErr) {
+    console.error("[authService] Failed to send verification email:", emailErr.message);
+  }
+
+  return { user: result.user, requiresVerification: true };
 }
 
 async function login(body) {
@@ -113,11 +128,10 @@ async function login(body) {
     throw new RequestError("Password is required.");
   }
 
-  return updateDb((db) => {
+  return updateDb(async (db) => {
     db.accounts = db.accounts || [];
     const account = db.accounts.find((candidate) => candidate.email === email);
 
-    // Use the same error message for both cases to avoid leaking whether the email exists
     if (!account || !verifyPassword(password, account)) {
       throw new RequestError("Invalid email or password.", 401);
     }
@@ -127,12 +141,40 @@ async function login(body) {
       throw new RequestError("Account user was not found.", 404);
     }
 
-    db.currentUserId = user.id;  // "Log in" by switching the current user
+    // Block login until email is verified
+    const verified = await isVerified(account.userId);
+    if (!verified) {
+      throw new RequestError("Email not verified. Please check your inbox.", 403, "EMAIL_NOT_VERIFIED");
+    }
+
+    db.currentUserId = user.id;
     return { user: publicUser(user) };
   });
+}
+
+async function resendVerification(body) {
+  const email = normalizeEmail(body?.email);
+  validateEmail(email);
+
+  // Read the DB without mutation to find the user
+  const { readDb } = require("./supabaseService");
+  const db = await readDb();
+  const account = (db.accounts || []).find((a) => a.email === email);
+  if (!account) {
+    // Return success even if email not found to avoid leaking account existence
+    return;
+  }
+
+  const verified = await isVerified(account.userId);
+  if (verified) return; // Already verified, no need to resend
+
+  const user = db.users.find((u) => u.id === account.userId);
+  const token = await createVerificationToken(account.userId);
+  await sendVerificationEmail(email, user?.name || "there", token);
 }
 
 module.exports = {
   login,
   register,
+  resendVerification,
 };

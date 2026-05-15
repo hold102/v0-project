@@ -24,8 +24,9 @@ import 'package:splitease/models/balance.dart';
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
+  final String? code;
 
-  const ApiException(this.message, [this.statusCode]);
+  const ApiException(this.message, [this.statusCode, this.code]);
 
   @override
   String toString() => message;
@@ -65,9 +66,10 @@ class ApiService {
   Map<String, dynamic> _decodeObjectResponse(http.Response res) {
     final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      final message =
-          decoded is Map<String, dynamic> ? decoded['error'] as String? : null;
-      throw ApiException(message ?? 'Request failed.', res.statusCode);
+      final body = decoded is Map<String, dynamic> ? decoded : null;
+      final message = body?['error'] as String?;
+      final code = body?['code'] as String?;
+      throw ApiException(message ?? 'Request failed.', res.statusCode, code);
     }
     if (decoded is! Map<String, dynamic>) {
       throw const ApiException('Unexpected API response.');
@@ -129,7 +131,7 @@ class ApiService {
     return User.fromJson(json['user'] as Map<String, dynamic>);
   }
 
-  Future<User> register({
+  Future<({User user, bool requiresVerification})> register({
     required String name,
     required String email,
     required String password,
@@ -146,7 +148,29 @@ class ApiService {
       }),
     );
     final json = _decodeObjectResponse(res);
-    return User.fromJson(json['user'] as Map<String, dynamic>);
+    return (
+      user: User.fromJson(json['user'] as Map<String, dynamic>),
+      requiresVerification: json['requiresVerification'] == true,
+    );
+  }
+
+  Future<void> resendVerification(String email) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/auth/resend-verification'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    await _expectSuccess(res);
+  }
+
+  Future<User> updateMyCurrency(String currency) async {
+    final res = await http.put(
+      Uri.parse('$_baseUrl/users/me/currency'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'currency': currency}),
+    );
+    final json = _decodeObjectResponse(res);
+    return User.fromJson(json);
   }
 
   Future<List<User>> getUsers() async {
@@ -181,12 +205,13 @@ class ApiService {
   }
 
   Future<Group> createGroup(String name, String emoji, List<String> memberIds,
-      {String? id}) async {
+      {String? id, String? description}) async {
     final body = <String, dynamic>{
       'name': name,
       'emoji': emoji,
       'memberIds': memberIds,
     };
+    if (description != null) body['description'] = description;
     if (id != null) body['id'] = id;
     final res = await http.post(
       Uri.parse('$_baseUrl/groups'),
@@ -200,11 +225,13 @@ class ApiService {
     required String groupId,
     String? name,
     String? emoji,
+    String? description,
     List<String>? memberIds,
   }) async {
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (emoji != null) body['emoji'] = emoji;
+    if (description != null) body['description'] = description;
     if (memberIds != null) body['memberIds'] = memberIds;
 
     final res = await http.put(
@@ -230,6 +257,7 @@ class ApiService {
     Map<String, double>? splitAmounts,
     String? date,
     String? id,
+    String? currency,
   }) async {
     final body = <String, dynamic>{
       'description': description,
@@ -243,6 +271,7 @@ class ApiService {
       body['splitAmounts'] = splitAmounts;
     }
     if (id != null) body['id'] = id;
+    if (currency != null) body['currency'] = currency;
     final res = await http.post(
       Uri.parse('$_baseUrl/groups/$groupId/expenses'),
       headers: {'Content-Type': 'application/json'},
@@ -278,6 +307,7 @@ class ApiService {
     Map<String, double>? splitAmounts,
     String? category,
     String? date,
+    String? currency,
   }) async {
     final body = <String, dynamic>{};
     if (description != null) body['description'] = description;
@@ -287,6 +317,7 @@ class ApiService {
     if (splitAmounts != null) body['splitAmounts'] = splitAmounts;
     if (category != null) body['category'] = category;
     if (date != null) body['date'] = date;
+    if (currency != null) body['currency'] = currency;
 
     final res = await http.put(
       Uri.parse('$_baseUrl/groups/$groupId/expenses/$expenseId'),
@@ -314,6 +345,14 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
+  Future<List<User>> searchUsers(String query) async {
+    final res = await http.get(
+      Uri.parse('$_baseUrl/users/search?q=${Uri.encodeQueryComponent(query)}'),
+    );
+    final list = _decodeListResponse(res);
+    return list.map((j) => User.fromJson(j as Map<String, dynamic>)).toList();
+  }
+
   Future<User> lookupUserByEmail(String email) async {
     final res = await http.get(
       Uri.parse('$_baseUrl/users/lookup?email=${Uri.encodeQueryComponent(email)}'),
@@ -321,6 +360,64 @@ class ApiService {
     if (res.statusCode == 404) throw Exception('No user found with that email.');
     if (res.statusCode != 200) throw Exception('Lookup failed.');
     return User.fromJson(jsonDecode(res.body));
+  }
+
+  // --- Friendships ---
+
+  Future<Map<String, String>> getFriendStatuses() async {
+    final res = await http.get(Uri.parse('$_baseUrl/friends/statuses'));
+    final json = _decodeObjectResponse(res);
+    return json.map((k, v) => MapEntry(k, v.toString()));
+  }
+
+  Future<List<User>> getFriends() async {
+    final res = await http.get(Uri.parse('$_baseUrl/friends'));
+    final list = _decodeListResponse(res);
+    return list
+        .map((r) => User.fromJson(r['user'] as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<User>> getIncomingRequests() async {
+    final res =
+        await http.get(Uri.parse('$_baseUrl/friends/requests/incoming'));
+    final list = _decodeListResponse(res);
+    return list
+        .map((r) => User.fromJson(r['user'] as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<User>> getOutgoingRequests() async {
+    final res =
+        await http.get(Uri.parse('$_baseUrl/friends/requests/outgoing'));
+    final list = _decodeListResponse(res);
+    return list
+        .map((r) => User.fromJson(r['user'] as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<String> sendFriendRequest(String userId) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/friends/request'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId}),
+    );
+    final json = _decodeObjectResponse(res);
+    return json['status'] as String;
+  }
+
+  Future<void> acceptFriendRequest(String userId) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/friends/requests/$userId/accept'),
+    );
+    await _expectSuccess(res);
+  }
+
+  Future<void> rejectFriendRequest(String userId) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/friends/requests/$userId/reject'),
+    );
+    await _expectSuccess(res);
   }
 
   Future<Group> addMemberToGroup(String groupId, String userId) async {

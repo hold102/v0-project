@@ -12,10 +12,10 @@ require("dotenv").config();
 const port = Number.parseInt(process.env.PORT || "5001", 10);
 
 module.exports = {
-  // Guard against NaN (e.g. PORT="abc")
   port: Number.isFinite(port) ? port : 5001,
-
-  //Supabase config
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY,
+  brevoApiKey: process.env.BREVO_API_KEY || null,
+  // Base URL used to build the verification link in emails (no trailing slash)
+  appBaseUrl: process.env.APP_BASE_URL || `http://localhost:5001`,
 };
